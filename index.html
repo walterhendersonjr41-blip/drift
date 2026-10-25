@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1020">
-<title>Drift: prototype</title>
+<title>Drift: daily check-in</title>
 <style>
 :root{
   --bg:#0b1020;--bg2:#111833;--card:#151d3b;--card2:#1b2550;--line:#26315f;
@@ -105,105 +105,112 @@ input:focus{border-color:var(--sky)}
 <script>
 (function(){
 "use strict";
-var KEY="drift.prototype.v1";
+/* Drift: personal, non-clinical self-tracking. Everything is typed in by you and stays in this browser
+   (localStorage). Nothing is sent anywhere. A web page can't read phone sensors, so you log once a day. */
+var KEY="drift.v1",MIN_DAYS=5,WINDOW=28;
+try{localStorage.removeItem("drift.prototype.v1")}catch(e){}
 var SIGNALS=[
-  {id:"bed",cat:"sleep",ico:"🌙",name:"Bedtime",unit:"time",base:23.2,norm:23.4,rough:25.7,scale:2.5,bad:"up"},
-  {id:"wake",cat:"sleep",ico:"🌅",name:"Wake time",unit:"time",base:7.0,norm:7.15,rough:8.5,scale:2.5,bad:"up"},
-  {id:"screen",cat:"screen",ico:"📱",name:"Screen time",unit:"h",base:3.2,norm:3.4,rough:4.95,scale:3.5,bad:"up"},
-  {id:"late",cat:"late",ico:"🕒",name:"After-midnight use",unit:"m",base:10,norm:6,rough:41,scale:70,bad:"up"},
-  {id:"social",cat:"apps",ico:"🌀",name:"Scrolling apps",unit:"h",base:1.1,norm:1.0,rough:2.475,scale:2.5,bad:"up"},
-  {id:"steps",cat:"steps",ico:"👟",name:"Steps",unit:"n",base:6800,norm:6400,rough:3300,scale:5000,bad:"down"},
-  {id:"texts",cat:"texts",ico:"💬",name:"Texts returned",unit:"n",base:9,norm:8,rough:4,scale:7,bad:"down"},
-  {id:"mood",cat:"mood",ico:"🙂",name:"Mood check-in",unit:"mood",base:4,norm:4,rough:3,scale:2.5,bad:"down"}
+  {id:"bed",cat:"sleep",ico:"🌙",name:"Bedtime",unit:"time",scale:2.5,bad:"up",q:"What time did you go to sleep last night?"},
+  {id:"wake",cat:"sleep",ico:"🌅",name:"Wake time",unit:"time",scale:2.5,bad:"up",q:"What time did you wake up today?"},
+  {id:"screen",cat:"screen",ico:"📱",name:"Screen time",unit:"h",scale:3.5,bad:"up",q:"Screen time yesterday (hours, from Screen Time / Digital Wellbeing)",max:24,step:0.25},
+  {id:"late",cat:"late",ico:"🕒",name:"After-midnight use",unit:"m",scale:70,bad:"up",q:"Minutes on your phone after midnight",max:600,step:5},
+  {id:"social",cat:"apps",ico:"🌀",name:"Scrolling apps",unit:"h",scale:2.5,bad:"up",q:"Hours in social / scrolling apps yesterday",max:24,step:0.25},
+  {id:"steps",cat:"steps",ico:"👟",name:"Steps",unit:"n",scale:5000,bad:"down",q:"Steps yesterday (from your phone's Health / Fit app)",max:100000,step:100},
+  {id:"texts",cat:"texts",ico:"💬",name:"Texts returned",unit:"n",scale:7,bad:"down",q:"About how many people did you text back yesterday?",max:500,step:1},
+  {id:"mood",cat:"mood",ico:"🙂",name:"Mood check-in",unit:"mood",scale:2.5,bad:"down"}
 ];
 var CONSENTS=[
-  {id:"sleep",ico:"🌙",t:"Sleep & wake times",d:"From your phone's health data. Times only."},
-  {id:"screen",ico:"📱",t:"Total screen time",d:"Daily minutes. Never what's on screen."},
-  {id:"late",ico:"🕒",t:"Late-night phone use",d:"Minutes after midnight."},
-  {id:"apps",ico:"🌀",t:"App categories",d:"Social / scrolling vs. other. No app content."},
-  {id:"steps",ico:"👟",t:"Step count",d:"Daily total from your phone."},
-  {id:"texts",ico:"💬",t:"How often you text back",d:"A count only. Messages are never read."},
+  {id:"sleep",ico:"🌙",t:"Sleep & wake times",d:"You enter two times a day. Nothing else."},
+  {id:"screen",ico:"📱",t:"Total screen time",d:"You copy the daily total from Screen Time / Digital Wellbeing."},
+  {id:"late",ico:"🕒",t:"Late-night phone use",d:"Your own estimate of minutes after midnight."},
+  {id:"apps",ico:"🌀",t:"Scrolling apps",d:"Hours in social / scrolling apps. No app content."},
+  {id:"steps",ico:"👟",t:"Step count",d:"The daily total from your Health or Fit app."},
+  {id:"texts",ico:"💬",t:"How often you text back",d:"A rough count. Messages are never read."},
   {id:"mood",ico:"🙂",t:"Daily 1-tap mood check-in",d:"You choose how you feel, once a day."}
 ];
 var NUDGES=[
-  {id:"walk",ico:"🚶",t:"Take a 10-minute walk",d:"Your steps are way down today. A short loop outside usually resets your afternoon."},
-  {id:"call",ico:"📞",t:"Call someone you trust",d:"You've barely texted anyone back today. A 5-minute call with Maya could help."},
-  {id:"bed",ico:"🛏️",t:"Phone down by 11:30",d:"You were up until almost 2 AM. An early night tends to make tomorrow easier for you."},
-  {id:"meeting",ico:"🤝",t:"Check in with your group",d:"Reach out to your sponsor or go to a meeting today, even a short one."}
+  {id:"walk",ico:"🚶",t:"Take a 10-minute walk",rel:["steps","screen","social"],d:"Your steps are down from your usual. A short loop outside often resets the day."},
+  {id:"call",ico:"📞",t:"Call someone you trust",rel:["texts","mood"],d:"You've been quieter with people than usual. A 5-minute call can help."},
+  {id:"bed",ico:"🛏️",t:"Phone down by 11:30 tonight",rel:["bed","late","wake","screen"],d:"Your sleep moved later than your usual. An earlier night tends to make tomorrow easier."},
+  {id:"meeting",ico:"🤝",t:"Check in with your group",rel:["mood","texts"],d:"Reach out to your sponsor, group or a meeting today, even a short one."}
 ];
-var DEMO_CIRCLE=[{name:"Maya",rel:"Sister",phone:"(demo)"},{name:"Coach Ray",rel:"Sponsor",phone:"(demo)"}];
 var COLORS=["#6ee7c8","#7aa7ff","#b49cff","#ffc773"];
 
 function defaults(){
   var c={};CONSENTS.forEach(function(x){c[x.id]=true});
-  return {onboarded:false,consents:c,rough:false,circle:DEMO_CIRCLE.slice(),
-    nudgeStats:{walk:{done:3,skip:1},call:{done:2,skip:1},bed:{done:1,skip:3},meeting:{done:2,skip:0}},
-    activeNudge:null,nudgeLog:[],mood:null,circleSent:false,circlePaused:false};
+  var ns={};NUDGES.forEach(function(n){ns[n.id]={done:0,skip:0}});
+  return {onboarded:false,name:"",consents:c,logs:{},circle:[],nudgeStats:ns,activeNudge:null,nudgeLog:[],circleSent:"",circlePaused:false};
 }
 var S;
 try{S=JSON.parse(localStorage.getItem(KEY))||defaults()}catch(e){S=defaults()}
+(function(){var d=defaults();for(var k in d)if(S[k]===undefined)S[k]=d[k];NUDGES.forEach(function(n){if(!S.nudgeStats[n.id])S.nudgeStats[n.id]={done:0,skip:0}})})();
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
-// URL shortcuts for demos/screenshots: #today?rough=1&fresh=1
-function parseHash(){
-  var h=location.hash.replace(/^#/,"");var parts=h.split("?");var q={};
-  (parts[1]||"").split("&").forEach(function(kv){if(kv){var p=kv.split("=");q[p[0]]=p[1]||"1"}});
-  return {route:parts[0]||"",q:q};
-}
-var init=parseHash();
-if(init.q.fresh){S=defaults()}
-if(init.q.onboarded){S.onboarded=true}
-if(init.q.rough){S.onboarded=true;applyRough(true,true)}
-
-function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function parseHash(){var h=location.hash.replace(/^#/,"").split("?")[0];return {route:h}}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function dkey(d){d=d||new Date();return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2)}
+function daysAgo(n){var d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-n);return d}
+var TODAY=dkey();
+function todayLog(){return S.logs[TODAY]||{}}
 function fmt(sig,v){
-  if(sig.unit==="time"){var h=v%24,hh=Math.floor(h),mm=Math.round((h-hh)*60);if(mm===60){hh++;mm=0}var ap=hh>=12?"PM":"AM";var h12=hh%12||12;return h12+":"+(mm<10?"0":"")+mm+" "+ap}
-  if(sig.unit==="h"){var H=Math.floor(v),M=Math.round((v-H)*60);return H+"h "+M+"m"}
+  if(v==null||isNaN(v))return "-";
+  if(sig.unit==="time"){var h=((v%24)+24)%24,hh=Math.floor(h),mm=Math.round((h-hh)*60);if(mm===60){hh=(hh+1)%24;mm=0}var ap=hh>=12?"PM":"AM";var h12=hh%12||12;return h12+":"+(mm<10?"0":"")+mm+" "+ap}
+  if(sig.unit==="h"){var H=Math.floor(v),M=Math.round((v-H)*60);if(M===60){H++;M=0}return H+"h "+M+"m"}
   if(sig.unit==="m")return Math.round(v)+" min";
   if(sig.unit==="mood")return ["","Really low","Low","Okay","Good","Great"][Math.round(v)]||"-";
   return Math.round(v).toLocaleString();
 }
-function todayVal(sig){
-  if(sig.id==="mood"&&S.mood)return S.mood;
-  return S.rough?sig.rough:sig.norm;
-}
-function dev(sig){
-  var d=(todayVal(sig)-sig.base)/sig.scale; if(sig.bad==="down")d=-d;
-  return Math.max(0,Math.min(1,d));
-}
+/* bedtimes after midnight count as 24+ so 1 AM is "later" than 11 PM */
+function timeToNum(t,isBed){if(!t)return null;var p=t.split(":"),h=+p[0]+(+p[1]||0)/60;if(isBed&&h<12)h+=24;return h}
+function numToTime(v){if(v==null)return "";var h=((v%24)+24)%24,hh=Math.floor(h),mm=Math.round((h-hh)*60);if(mm===60){hh=(hh+1)%24;mm=0}return ("0"+hh).slice(-2)+":"+("0"+mm).slice(-2)}
 function active(){return SIGNALS.filter(function(s){return S.consents[s.cat]})}
-function driftScore(){
-  var a=active();if(!a.length)return 0;
-  var sum=0;a.forEach(function(s){sum+=dev(s)});
-  var base=sum/a.length*100;
-  var n=a.filter(function(s){return dev(s)>=.5}).length;
-  // several signals moving together count more than one outlier
-  var boost=n>=3?12:0;
-  return Math.round(Math.max(8,Math.min(96,base+boost)));
+function median(a){a=a.slice().sort(function(x,y){return x-y});var m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2}
+function loggedDays(){return Object.keys(S.logs).filter(function(k){var l=S.logs[k];return l&&Object.keys(l).some(function(x){return l[x]!=null})}).sort()}
+/* baseline = median of your own past entries (last 28 days, not counting the day being scored) */
+function baseline(sig,excludeKey){
+  var lo=dkey(daysAgo(WINDOW)),vals=[];
+  Object.keys(S.logs).forEach(function(k){if(k===excludeKey||k<lo)return;var v=S.logs[k][sig.id];if(v!=null&&!isNaN(v))vals.push(+v)});
+  return vals.length>=MIN_DAYS?median(vals):null;
 }
-function drifting(){return active().filter(function(s){return dev(s)>=.5})}
-function level(sc){return sc<35?{t:"Steady",c:"var(--calm)",hex:"#6ee7c8",d:"You're close to your normal week."}:sc<60?{t:"Drifting a little",c:"var(--warm)",hex:"#ffc773",d:"A few things are off your usual pattern."}:{t:"Drifting",c:"var(--hot)",hex:"#ff8a7a",d:"Several signals moved away from your normal together."}}
-function trend(){
-  var t=driftScore();
-  return S.rough?[22,18,25,31,46,58,t]:[22,18,25,20,16,24,t];
+function dev(sig,key){
+  var l=S.logs[key||TODAY]||{},v=l[sig.id],b=baseline(sig,key||TODAY);
+  if(v==null||b==null)return null;
+  var d=(v-b)/sig.scale;if(sig.bad==="down")d=-d;return Math.max(0,Math.min(1,d));
 }
+function scoreFor(key){
+  var a=active(),ds=[];a.forEach(function(s){var d=dev(s,key);if(d!=null)ds.push(d)});
+  if(ds.length<2)return null;
+  var base=ds.reduce(function(x,y){return x+y},0)/ds.length*100;
+  var n=ds.filter(function(d){return d>=.5}).length;
+  return Math.round(Math.max(0,Math.min(100,base+(n>=3?12:0))));
+}
+function driftScore(){return scoreFor(TODAY)}
+function drifting(){return active().filter(function(s){var d=dev(s);return d!=null&&d>=.5})}
+function level(sc){return sc<35?{t:"Steady",c:"var(--calm)",hex:"#6ee7c8",d:"You're close to your normal."}:sc<60?{t:"Drifting a little",c:"var(--warm)",hex:"#ffc773",d:"A few things are off your usual pattern."}:{t:"Drifting",c:"var(--hot)",hex:"#ff8a7a",d:"Several things moved away from your normal together."}}
+function trend(){var out=[];for(var i=6;i>=0;i--)out.push(scoreFor(dkey(daysAgo(i))));return out}
+function learned(){return loggedDays().filter(function(k){return k!==TODAY}).length}
 function pickNudge(){
-  // learn what works: success rate with a small prior, filtered by what's drifting
   var dr=drifting().map(function(s){return s.id});
-  var rel={walk:dr.indexOf("steps")>=0,call:dr.indexOf("texts")>=0,bed:dr.indexOf("bed")>=0||dr.indexOf("late")>=0,meeting:dr.length>=7};
   var best=null,bs=-1;
-  NUDGES.forEach(function(n){var st=S.nudgeStats[n.id];var r=(st.done+1)/(st.done+st.skip+2)+(rel[n.id]?.15:0);if(r>bs){bs=r;best=n}});
+  NUDGES.forEach(function(n){var st=S.nudgeStats[n.id];var rel=n.rel.some(function(r){return dr.indexOf(r)>=0});
+    var r=(st.done+1)/(st.done+st.skip+2)+(rel?.25:0);if(r>bs){bs=r;best=n}});
   return best.id;
 }
-function applyRough(on,silent){
-  S.rough=on;
-  if(on){S.activeNudge=pickNudge();S.circleSent=false;S.mood=S.mood&&S.mood<=3?S.mood:null}
-  else{S.activeNudge=null;S.circleSent=false;S.mood=null}
-  save();
-  if(!silent&&on)setTimeout(function(){showToast()},600);
+/* after each check-in: if today is a real slide, offer one nudge (max one per day) */
+function evaluate(){
+  var sc=driftScore();
+  if(sc!=null&&(sc>=60||drifting().length>=3)){
+    if(!S.activeNudge||S.activeNudge.date!==TODAY){if(!S.nudgeLog.some(function(l){return l.date===TODAY})){S.activeNudge={id:pickNudge(),date:TODAY};save();return true}}
+  }
+  return false;
+}
+function nudgeText(n){
+  if(n.id==="call"&&S.circle[0])return "You've been quieter with people than usual. A 5-minute call with "+esc(S.circle[0].name)+" could help.";
+  if(n.id==="bed"){var b=SIGNALS[0],v=todayLog().bed,u=baseline(b,TODAY);if(v!=null&&u!=null)return "You went to sleep around "+fmt(b,v)+"; your usual is "+fmt(b,u)+". An earlier night tends to make tomorrow easier.";}
+  if(n.id==="walk"){var s=SIGNALS[5],sv=todayLog().steps,su=baseline(s,TODAY);if(sv!=null&&su!=null)return "You logged "+fmt(s,sv)+" steps; your usual is about "+fmt(s,su)+". A short loop outside often resets the day.";}
+  return n.d;
 }
 
-// --- icons
 var I={
   today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1.5" fill="currentColor"/></svg>',
   trends:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg>',
@@ -215,38 +222,38 @@ function tabs(cur){
   document.getElementById("tabs").innerHTML=t.map(function(x){return '<button data-go="'+x[0]+'" class="'+(cur===x[0]?"on":"")+'">'+I[x[0]]+x[1]+'</button>'}).join("");
 }
 function header(){
-  return '<div class="top"><div class="logo"><i></i>Drift</div><div class="row"><span class="pill demo">DEMO DATA</span><button class="help" data-go="crisis">Need help now?</button></div></div>';
+  return '<div class="top"><div class="logo"><i></i>Drift</div><div class="row"><span class="pill" title="Your entries never leave this device">🔒 On this device</span><button class="help" data-go="crisis">Need help now?</button></div></div>';
 }
+var NOTE='<p class="disclaim">Personal, non-clinical self-tracking. Not a medical device and not a diagnosis.<br>Using Drift with patients or clients, or with real health records, would need a HIPAA review first.</p>';
 
-// --- screens
 function vOnboard(step){
   step=step||0;
   if(step===0)return '<div class="fade" style="padding-top:40px">'+
     '<div class="logo" style="font-size:22px"><i style="width:30px;height:30px"></i>Drift</div>'+
     '<h1 class="mt24" style="font-size:34px;line-height:1.1">Catch the slide<br>before it starts.</h1>'+
-    '<p class="mt16">Drift learns what a normal week looks like for <b style="color:var(--text)">you</b>. When several things shift at once, like sleep, steps, late-night scrolling, or going quiet with friends, it sends one small nudge to help you get back on track.</p>'+
-    '<div class="card mt24"><div class="row"><div class="ico">🔒</div><div class="grow"><h3>You\'re in control</h3><p class="small mt8" style="font-size:13px">Every signal is opt-in. Drift never reads your messages, posts or screen content. Pause or delete anytime.</p></div></div></div>'+
-    '<div class="card mt12"><div class="row"><div class="ico">🤝</div><div class="grow"><h3>Support, not diagnosis</h3><p class="small mt8" style="font-size:13px">Drift is a wellness support tool. It isn\'t a medical device and doesn\'t diagnose anything.</p></div></div></div>'+
-    '<button class="btn mt24" data-ob="1">Get started</button>'+
-    '<p class="disclaim">Prototype · all data shown is simulated demo data</p></div>';
+    '<p class="mt16">Drift learns what a normal week looks like for <b style="color:var(--text)">you</b>. Log a few numbers once a day. When several things shift at once, like sleep, steps, late-night scrolling, or going quiet with friends, it suggests one small thing to help you get back on track.</p>'+
+    '<div class="card mt24"><div class="row"><div class="ico">🔒</div><div class="grow"><h3>You\'re in control</h3><p class="small mt8" style="font-size:13px">Every signal is opt-in and typed in by you. Everything stays in this browser on this device. Export or delete anytime.</p></div></div></div>'+
+    '<div class="card mt12"><div class="row"><div class="ico">🤝</div><div class="grow"><h3>Support, not diagnosis</h3><p class="small mt8" style="font-size:13px">Drift is a personal wellness tool. It isn\'t a medical device and doesn\'t diagnose anything.</p></div></div></div>'+
+    '<button class="btn mt24" data-ob="1">Get started</button>'+NOTE+'</div>';
   if(step===1)return '<div class="fade" style="padding-top:12px">'+
-    '<p class="small">Step 1 of 2</p><h1 class="mt8">What can Drift notice?</h1>'+
-    '<p class="mt8">Turn on only what you\'re comfortable with. More signals make it more accurate, but any mix works.</p>'+
+    '<p class="small">Step 1 of 2</p><h1 class="mt8">What will you track?</h1>'+
+    '<p class="mt8">Turn on only what you\'re comfortable logging. More signals make it more accurate, but any mix of two or more works.</p>'+
     '<div class="card mt16 list" style="padding:4px 16px">'+CONSENTS.map(function(c){
       return '<div><div class="ico">'+c.ico+'</div><div class="grow"><h3>'+c.t+'</h3><div class="small" style="margin-top:2px">'+c.d+'</div></div><button class="tog '+(S.consents[c.id]?"on":"")+'" data-tog="'+c.id+'" aria-label="'+c.t+'"></button></div>'}).join("")+'</div>'+
     '<button class="btn mt16" data-ob="2">Continue</button></div>';
+  var n=learned();
   return '<div class="fade" style="padding-top:12px">'+
     '<p class="small">Step 2 of 2</p><h1 class="mt8">Learning your normal</h1>'+
-    '<p class="mt8">For the first 14 days Drift just watches quietly to learn your baseline. No nudges until it knows you.</p>'+
-    '<div class="card mt16"><div class="row between"><h3>Baseline progress</h3><span class="pill demo">demo: skipped ahead</span></div><div class="bar" style="height:10px"><i style="width:100%;background:linear-gradient(90deg,var(--calm),var(--sky))"></i></div><p class="small mt8">14 of 14 days learned (simulated)</p></div>'+
-    '<div class="card mt12"><h3>Where your data lives</h3><p class="small mt8" style="font-size:13px">Baselines are computed on your phone. Only you see your signals. Your Circle only ever gets a short, kind check-in message, never your data. Your program or employer only sees anonymous group trends, if you agree.</p></div>'+
+    '<p class="mt8">Log once a day (it takes about a minute). After '+MIN_DAYS+' days Drift starts comparing each day with your own usual. No nudges until it knows you.</p>'+
+    '<div class="card mt16"><div class="row between"><h3>Baseline progress</h3></div><div class="bar" style="height:10px"><i style="width:'+Math.min(100,n/MIN_DAYS*100)+'%;background:linear-gradient(90deg,var(--calm),var(--sky))"></i></div><p class="small mt8">'+Math.min(n,MIN_DAYS)+' of '+MIN_DAYS+' days logged</p></div>'+
+    '<div class="card mt12"><h3>What should Drift call you?</h3><input id="obName" class="mt12" placeholder="First name (optional)" maxlength="24" value="'+esc(S.name)+'"></div>'+
+    '<div class="card mt12"><h3>Where your data lives</h3><p class="small mt8" style="font-size:13px">Your baseline is computed in this browser. Only you see your numbers. If you add people to your Circle, Drift only ever opens a short, kind text on your own phone for you to send. It never shares your data.</p></div>'+
     '<button class="btn mt24" data-ob="done">Open my dashboard</button></div>';
 }
-
 function gauge(sc){
   var L=level(sc);var R=86,cx=110,cy=110,start=Math.PI,span=Math.PI;
   function pt(f){var a=start+span*f;return [cx+R*Math.cos(a),cy+R*Math.sin(a)]}
-  var p0=pt(0),p1=pt(1),pv=pt(sc/100);
+  var p0=pt(0),p1=pt(1),pv=pt(Math.max(.01,sc/100));
   var bandEnd=pt(.3);
   return '<div class="gaugeWrap"><svg width="220" height="146" viewBox="0 0 220 146">'+
     '<defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="#6ee7c8"/><stop offset=".5" stop-color="#ffc773"/><stop offset="1" stop-color="#ff8a7a"/></linearGradient></defs>'+
@@ -258,82 +265,110 @@ function gauge(sc){
     '</svg><div class="gaugeTxt"><b style="color:'+L.c+'">'+sc+'</b><span class="small">Drift score</span></div></div>';
 }
 function sigCard(s){
-  var on=S.consents[s.cat];var d=dev(s);
-  var col=d>=.5?"var(--hot)":d>=.25?"var(--warm)":"var(--calm)";
-  var v=on?(s.id==="mood"&&!S.mood&&!S.rough?"Not yet":fmt(s,todayVal(s))):"Off";
-  return '<div class="sig '+(on?"":"off")+'"><div class="row between"><span style="font-size:16px">'+s.ico+'</span>'+(on&&d>=.5?'<span class="dot" style="background:var(--hot)"></span>':'')+'</div>'+
-    '<div class="small" style="margin-top:6px;color:var(--mute)">'+s.name+'</div><div class="v">'+v+'</div><div class="b">Usual: '+fmt(s,s.base)+'</div>'+
-    '<div class="bar"><i style="width:'+(on?Math.max(6,d*100):0)+'%;background:'+col+'"></i></div></div>';
+  var on=S.consents[s.cat],v=todayLog()[s.id],d=dev(s),b=baseline(s,TODAY);
+  var col=d==null?"var(--dim)":d>=.5?"var(--hot)":d>=.25?"var(--warm)":"var(--calm)";
+  var shown=on?(v==null?"Not logged":fmt(s,v)):"Off";
+  return '<div class="sig '+(on?"":"off")+'"><div class="row between"><span style="font-size:16px">'+s.ico+'</span>'+(on&&d!=null&&d>=.5?'<span class="dot" style="background:var(--hot)"></span>':'')+'</div>'+
+    '<div class="small" style="margin-top:6px;color:var(--mute)">'+s.name+'</div><div class="v">'+shown+'</div><div class="b">Usual: '+(b==null?"learning…":fmt(s,b))+'</div>'+
+    '<div class="bar"><i style="width:'+(on&&d!=null?Math.max(6,d*100):0)+'%;background:'+col+'"></i></div></div>';
 }
 function nudgeCard(){
-  var n=NUDGES.filter(function(x){return x.id===S.activeNudge})[0];if(!n)return "";
+  var a=S.activeNudge;if(!a||a.date!==TODAY)return "";
+  var n=NUDGES.filter(function(x){return x.id===a.id})[0];if(!n)return "";
+  var st=S.nudgeStats[n.id],tot=st.done+st.skip;
   return '<div class="card nudge mt16 fade" id="nudgeCard"><div class="row between"><span class="pill" style="background:rgba(110,231,200,.15);color:var(--calm)">One small thing</span><span class="small">picked for you</span></div>'+
-    '<div class="row mt12" style="align-items:flex-start"><div class="ico" style="background:rgba(255,255,255,.08);font-size:22px;width:46px;height:46px">'+n.ico+'</div><div class="grow"><h2 style="font-size:18px">'+n.t+'</h2><p class="mt8" style="font-size:14px">'+n.d+'</p></div></div>'+
+    '<div class="row mt12" style="align-items:flex-start"><div class="ico" style="background:rgba(255,255,255,.08);font-size:22px;width:46px;height:46px">'+n.ico+'</div><div class="grow"><h2 style="font-size:18px">'+n.t+'</h2><p class="mt8" style="font-size:14px">'+nudgeText(n)+'</p></div></div>'+
     '<div class="row mt16"><button class="btn" style="height:46px" data-nudge="done">Done</button><button class="btn ghost" style="height:46px" data-nudge="skip">Not now</button></div>'+
-    '<p class="small mt12">Chosen because it\'s worked for you '+S.nudgeStats[n.id].done+' of '+(S.nudgeStats[n.id].done+S.nudgeStats[n.id].skip)+' times.</p></div>';
+    '<p class="small mt12">'+(tot?'It\'s worked for you '+st.done+' of '+tot+' times.':'Drift learns from your Done and Not now taps.')+'</p></div>';
 }
+function circleMsg(p){var me=S.name||"I";return "Hey"+(p&&p.name?" "+p.name:"")+", "+(S.name?"it's "+S.name+". ":"")+"No emergency, I'm just having a tougher week. If you get a minute today, a quick text or call would mean a lot. 💙"}
+function smsHref(p){var body=encodeURIComponent(circleMsg(p));var num=(p.phone||"").replace(/[^\d+]/g,"");return "sms:"+num+(/iPhone|iPad|iPod|Mac/.test(navigator.userAgent)?"&":"?")+"body="+body}
 function circleCard(){
-  if(!S.rough||!S.circle.length)return "";
+  var sc=driftScore();if(sc==null||sc<60||!S.circle.length)return "";
   var f=S.circle[0];
-  if(S.circlePaused)return '<div class="card mt12"><div class="row"><div class="ico">⏸️</div><div class="grow"><h3>Circle check-ins paused</h3><p class="small">No one will be notified.</p></div><button class="pill" data-act="unpause">Resume</button></div></div>';
-  return '<div class="card mt12"><div class="row"><div class="av" style="background:'+COLORS[0]+'">'+esc(f.name[0])+'</div><div class="grow"><h3>'+(S.circleSent?"We let "+esc(f.name)+" know":"Your Circle")+'</h3><p class="small" style="margin-top:2px">'+(S.circleSent?"A gentle “check on Alex today” was sent (demo, nothing actually sent).":"You've been sliding for a few days. Drift will ask "+esc(f.name)+" to check in on you tonight. No details are shared.")+'</p></div></div>'+
-    (S.circleSent?'':'<div class="row mt12"><button class="btn soft" style="height:40px;font-size:14px" data-act="sendCircle">Send now</button><button class="btn ghost" style="height:40px;font-size:14px" data-act="pause">Not this time</button></div>')+'</div>';
+  if(S.circlePaused)return '<div class="card mt12"><div class="row"><div class="ico">⏸️</div><div class="grow"><h3>Circle check-ins paused</h3><p class="small">Drift won\'t suggest texting anyone.</p></div><button class="pill" data-act="unpause">Resume</button></div></div>';
+  var sent=S.circleSent===TODAY;
+  return '<div class="card mt12"><div class="row"><div class="av" style="background:'+COLORS[0]+'">'+esc(f.name[0])+'</div><div class="grow"><h3>'+(sent?"You opened a text to "+esc(f.name):"Your Circle")+'</h3><p class="small" style="margin-top:2px">'+(sent?"Your phone's messages app opened with a short, kind note. Only you can press send.":"Today is well off your normal. Want to ask "+esc(f.name)+" to check in? Drift opens a short, kind text on your phone. No details are shared.")+'</p></div></div>'+
+    (sent?'':'<div class="row mt12"><a class="btn soft" style="height:40px;font-size:14px;text-decoration:none" data-act="sendCircle" href="'+smsHref(f)+'">Text '+esc(f.name)+'</a><button class="btn ghost" style="height:40px;font-size:14px" data-act="pause">Not this time</button></div>')+'</div>';
 }
 function vToday(){
-  var sc=driftScore(),L=level(sc),dr=drifting();
+  var sc=driftScore(),n=learned(),tl=todayLog(),hasToday=Object.keys(tl).length>0,hi=S.name?"Hey, "+esc(S.name):"Hey there";
+  var top;
+  if(sc==null){
+    top='<div class="card mt16" style="text-align:center;padding:22px 16px"><h2>'+(n<MIN_DAYS?"Learning your normal":"Log today to see your score")+'</h2>'+
+      (n<MIN_DAYS?'<div class="bar mt12" style="height:10px"><i style="width:'+Math.min(100,n/MIN_DAYS*100)+'%;background:linear-gradient(90deg,var(--calm),var(--sky))"></i></div><p class="small mt8">'+n+' of '+MIN_DAYS+' past days logged. Your Drift score starts after '+MIN_DAYS+'.</p>':'<p class="small mt8">You have '+n+' days of history. Add today\'s numbers to compare.</p>')+
+      '<button class="btn mt16" data-go="mood">'+(hasToday?"Add more to today":"Log today")+'</button></div>';
+  } else {
+    var L=level(sc),dr=drifting();
+    top='<div class="card mt16" style="padding:16px 16px 14px">'+gauge(sc)+
+      '<div style="text-align:center;margin-top:6px"><h2 style="color:'+L.c+'">'+L.t+'</h2><p class="mt8" style="font-size:13.5px">'+L.d+(dr.length?' <b style="color:var(--text)">'+dr.length+' of '+active().length+'</b> signals are off.':'')+'</p></div></div>';
+  }
   return '<div class="fade">'+header()+
-    '<p class="small">'+new Date().toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})+'</p><h1 style="margin-top:2px">Hey, Alex</h1>'+
-    '<div class="card mt16" style="padding:16px 16px 14px">'+gauge(sc)+
-      '<div style="text-align:center;margin-top:6px"><h2 style="color:'+L.c+'">'+L.t+'</h2><p class="mt8" style="font-size:13.5px">'+L.d+(dr.length?' <b style="color:var(--text)">'+dr.length+' of '+active().length+'</b> signals are off.':'')+'</p></div></div>'+
-    nudgeCard()+circleCard()+
+    '<p class="small">'+new Date().toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})+'</p><h1 style="margin-top:2px">'+hi+'</h1>'+
+    top+nudgeCard()+circleCard()+
     '<div class="row between mt24"><h2 style="font-size:17px">Today vs. your normal</h2><span class="small">'+active().length+' signals on</span></div>'+
     '<div class="grid2 mt12">'+SIGNALS.map(sigCard).join("")+'</div>'+
-    '<button class="btn '+(S.rough?"ghost":"warn")+' mt24" data-act="rough">'+(S.rough?"↺ Reset to a normal day":"⚡ Simulate a rough day")+'</button>'+
-    '<p class="disclaim">All numbers are simulated demo data.<br>Drift is a support tool, not a diagnosis or medical device.</p></div>';
+    '<button class="btn soft mt24" data-go="mood">'+(hasToday?"✎ Edit today\'s check-in":"＋ Log today")+'</button>'+NOTE+'</div>';
 }
 function vTrends(){
-  var d=trend(),W=350,H=190,pl=28,pr=22,pt=14,pb=26;
-  var days=[];for(var i=6;i>=0;i--){var dt=new Date();dt.setDate(dt.getDate()-i);days.push(i===0?"Today":dt.toLocaleDateString(undefined,{weekday:"short"}))}
+  var d=trend(),W=350,H=190,pl=28,pr=22,pt=14,pb=26,pts=d.filter(function(v){return v!=null}).length;
+  var days=[];for(var i=6;i>=0;i--){days.push(i===0?"Today":daysAgo(i).toLocaleDateString(undefined,{weekday:"short"}))}
   function x(i){return pl+i*(W-pl-pr)/6}function y(v){return pt+(100-v)*(H-pt-pb)/100}
-  var path=d.map(function(v,i){return(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)}).join(" ");
-  var area=path+" L"+x(6)+" "+y(0)+" L"+x(0)+" "+y(0)+"Z";
-  var svg='<svg width="100%" viewBox="0 0 '+W+' '+H+'"><defs><linearGradient id="ar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+(S.rough?"#ff8a7a":"#6ee7c8")+'" stop-opacity=".35"/><stop offset="1" stop-color="#6ee7c8" stop-opacity="0"/></linearGradient></defs>'+
+  var path="",pen=false;d.forEach(function(v,i){if(v==null){pen=false;return}path+=(pen?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)+" ";pen=true});
+  var last=d[6]!=null?d[6]:null,hot=last!=null&&last>=60;
+  var svg='<svg width="100%" viewBox="0 0 '+W+' '+H+'">'+
     '<rect x="'+pl+'" y="'+y(30)+'" width="'+(W-pl-pr)+'" height="'+(y(0)-y(30))+'" fill="rgba(110,231,200,.08)" rx="6"/>'+
     '<text x="'+(W-pr-6)+'" y="'+(y(0)-6)+'" fill="#6ee7c8" font-size="10" opacity=".8" text-anchor="end">your normal range</text>'+
     [0,50,100].map(function(v){return '<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="#26315f" stroke-dasharray="3 4"/><text x="'+(pl-6)+'" y="'+(y(v)+3)+'" fill="#6b75a0" font-size="10" text-anchor="end">'+v+'</text>'}).join("")+
     '<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(60)+'" y2="'+y(60)+'" stroke="#ff8a7a" stroke-opacity=".5" stroke-dasharray="2 3"/><text x="'+(pl+6)+'" y="'+(y(60)-5)+'" fill="#ff8a7a" font-size="9.5" opacity=".8">nudge line</text>'+
-    '<path d="'+area+'" fill="url(#ar)"/><path d="'+path+'" fill="none" stroke="'+(S.rough?"#ffb08a":"#6ee7c8")+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+
-    d.map(function(v,i){return '<circle cx="'+x(i)+'" cy="'+y(v)+'" r="'+(i===6?5.5:3.5)+'" fill="#0b1020" stroke="'+(v>=60?"#ff8a7a":v>=35?"#ffc773":"#6ee7c8")+'" stroke-width="2.5"/>'}).join("")+
+    (path?'<path d="'+path+'" fill="none" stroke="'+(hot?"#ffb08a":"#6ee7c8")+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>':'')+
+    d.map(function(v,i){return v==null?'':'<circle cx="'+x(i)+'" cy="'+y(v)+'" r="'+(i===6?5.5:3.5)+'" fill="#0b1020" stroke="'+(v>=60?"#ff8a7a":v>=35?"#ffc773":"#6ee7c8")+'" stroke-width="2.5"/>'}).join("")+
     days.map(function(t,i){return '<text x="'+x(i)+'" y="'+(H-6)+'" fill="'+(i===6?"#e9ecf8":"#6b75a0")+'" font-size="10.5" text-anchor="middle">'+t+'</text>'}).join("")+'</svg>';
-  var tot=0;NUDGES.forEach(function(n){var s=S.nudgeStats[n.id];tot=Math.max(tot,s.done+s.skip)});
+  var pills="";
+  if(pts>=2){
+    var seq=d.filter(function(v){return v!=null}),r=0;for(var k=seq.length-1;k>0&&seq[k]>=seq[k-1]+3;k--)r++;if(seq[seq.length-1]<35)r=0;
+    var bi=-1,bv=999;d.forEach(function(v,i){if(v!=null&&v<bv){bv=v;bi=i}});
+    pills=(r>=2?'<span class="pill" style="color:var(--hot)">↗ Rising '+(r+1)+' logged days in a row</span>':'<span class="pill" style="color:var(--calm)">● No steady climb</span>')+(bi>=0?'<span class="pill">Closest to normal: '+days[bi]+'</span>':'');
+  }
+  var anyN=NUDGES.some(function(n){var s=S.nudgeStats[n.id];return s.done+s.skip>0});
   var works=NUDGES.map(function(n){var s=S.nudgeStats[n.id];return {n:n,s:s,r:(s.done)/(Math.max(1,s.done+s.skip))}}).sort(function(a,b){return b.r-a.r||b.s.done-a.s.done});
   return '<div class="fade">'+header()+'<h1>Your week</h1><p class="mt8">Drift score for the last 7 days, compared with your own normal range.</p>'+
-    '<div class="card mt16" style="padding:14px 10px 6px">'+svg+'</div>'+
-    '<div class="row mt12" style="gap:8px;flex-wrap:wrap">'+(S.rough?'<span class="pill" style="color:var(--hot)">↗ Rising 4 days in a row</span><span class="pill">Sleep & steps moved first</span>':'<span class="pill" style="color:var(--calm)">● Steady week</span><span class="pill">Best day: '+days[4]+'</span>')+'</div>'+
+    (pts?'<div class="card mt16" style="padding:14px 10px 6px">'+svg+'</div>':'<div class="card mt16" style="text-align:center;padding:22px 16px"><h3>No scores yet</h3><p class="small mt8">Scores appear once you have '+MIN_DAYS+' days logged ('+learned()+' so far). Keep checking in once a day.</p><button class="btn soft mt12" style="height:46px" data-go="mood">Log today</button></div>')+
+    (pills?'<div class="row mt12" style="gap:8px;flex-wrap:wrap">'+pills+'</div>':'')+
     '<h2 class="mt24" style="font-size:17px">What works for you</h2><p class="small mt8">Drift learns from every Done and Not now, and suggests what actually helps you first.</p>'+
-    '<div class="card mt12 works">'+works.map(function(w,i){return '<div style="'+(i?"margin-top:14px":"")+'"><div class="row between"><span style="font-size:14px">'+w.n.ico+' '+w.n.t+'</span><span class="small" style="flex:none">'+w.s.done+' done · '+w.s.skip+' skipped</span></div><div class="bar"><i style="width:'+Math.max(4,w.r*100)+'%;background:linear-gradient(90deg,var(--sky),var(--calm))"></i></div></div>'}).join("")+'</div>'+
-    (S.nudgeLog.length?'<h3 class="mt24">Recent nudges</h3><div class="card mt8 list" style="padding:2px 16px">'+S.nudgeLog.slice(-4).reverse().map(function(l){var n=NUDGES.filter(function(x){return x.id===l.id})[0];return '<div><span>'+n.ico+'</span><div class="grow" style="font-size:14px">'+n.t+'</div><span class="pill" style="color:'+(l.r==="done"?"var(--calm)":"var(--mute)")+'">'+(l.r==="done"?"Done":"Not now")+'</span></div>'}).join("")+'</div>':'')+
-    '<p class="disclaim">Demo data. Trends are for your own reflection, not a clinical assessment.</p></div>';
+    (anyN?'<div class="card mt12 works">'+works.map(function(w,i){return '<div style="'+(i?"margin-top:14px":"")+'"><div class="row between"><span style="font-size:14px">'+w.n.ico+' '+w.n.t+'</span><span class="small" style="flex:none">'+w.s.done+' done · '+w.s.skip+' skipped</span></div><div class="bar"><i style="width:'+Math.max(4,w.r*100)+'%;background:linear-gradient(90deg,var(--sky),var(--calm))"></i></div></div>'}).join("")+'</div>':'<div class="card mt12"><p class="small">Nothing yet. When Drift suggests something, your Done and Not now answers show up here.</p></div>')+
+    (S.nudgeLog.length?'<h3 class="mt24">Recent nudges</h3><div class="card mt8 list" style="padding:2px 16px">'+S.nudgeLog.slice(-4).reverse().map(function(l){var n=NUDGES.filter(function(x){return x.id===l.id})[0];if(!n)return "";return '<div><span>'+n.ico+'</span><div class="grow" style="font-size:14px">'+n.t+'<div class="small">'+esc(l.date||"")+'</div></div><span class="pill" style="color:'+(l.r==="done"?"var(--calm)":"var(--mute)")+'">'+(l.r==="done"?"Done":"Not now")+'</span></div>'}).join("")+'</div>':'')+
+    '<p class="disclaim">Trends are for your own reflection, not a clinical assessment.</p></div>';
 }
 function vCircle(){
   var f=S.circle[0];
-  return '<div class="fade">'+header()+'<h1>Your Circle</h1><p class="mt8">Pick 2–3 people you trust. If Drift sees a real slide, it sends one of them a short, kind nudge to check on you. They never see your data.</p>'+
-    '<div class="card mt16 list" style="padding:4px 16px">'+(S.circle.length?S.circle.map(function(p,i){return '<div><div class="av" style="background:'+COLORS[i%4]+'">'+esc(p.name[0]||"?")+'</div><div class="grow"><h3>'+esc(p.name)+'</h3><div class="small">'+esc(p.rel||"Trusted person")+'</div></div><button class="pill" data-rm="'+i+'">Remove</button></div>'}).join(""):'<div><p class="small">No one yet. Add someone below.</p></div>')+'</div>'+
-    (S.circle.length<3?'<div class="card mt12"><h3>Add someone</h3><input id="cName" class="mt12" placeholder="Name (e.g. Jordan)" maxlength="24"><input id="cRel" class="mt8" placeholder="Relationship (e.g. Friend, Sponsor)" maxlength="24"><button class="btn soft mt12" style="height:46px" data-act="addCircle">+ Add to Circle</button></div>':'<p class="small mt12">Your Circle is full (3 people max keeps it personal).</p>')+
-    '<h2 class="mt24" style="font-size:17px">What they\'ll get</h2><p class="small mt8">Preview of the message'+(f?" "+esc(f.name)+" would receive":"")+'. No scores, no details, no alarms.</p>'+
-    '<div class="phoneMock mt12"><div class="small" style="text-align:center;margin-bottom:10px">Text message · from Drift</div>'+
-      '<div class="bubble" style="margin-left:0;background:#2a3463;border-radius:20px 20px 20px 6px">Hey'+(f?" "+esc(f.name):"")+', Alex added you to his Drift circle. No emergency, he just might be having a tougher week. If you get a minute today, a quick text or call would mean a lot. 💙</div>'+
-      '<div class="small" style="margin-top:10px;text-align:center">Reply STOP to leave Alex\'s circle</div></div>'+
-    '<div class="card mt12"><div class="row"><div class="ico">🛡️</div><div class="grow"><h3>Rules Drift follows</h3><p class="small" style="margin-top:4px;font-size:12.5px">Max one check-in per week · you can cancel before it sends · never shares why · emergencies always go to 988, not friends.</p></div></div></div>'+
-    '<p class="disclaim">Demo: no real messages are sent from this prototype.</p></div>';
+  return '<div class="fade">'+header()+'<h1>Your Circle</h1><p class="mt8">Pick 2–3 people you trust. On a day that\'s well off your normal, Drift offers to open a short, kind text to one of them on your own phone. You press send. They never see your data.</p>'+
+    '<div class="card mt16 list" style="padding:4px 16px">'+(S.circle.length?S.circle.map(function(p,i){return '<div><div class="av" style="background:'+COLORS[i%4]+'">'+esc(p.name[0]||"?")+'</div><div class="grow"><h3>'+esc(p.name)+'</h3><div class="small">'+esc(p.rel||"Trusted person")+(p.phone?' · '+esc(p.phone):'')+'</div></div>'+(p.phone?'<a class="pill" style="text-decoration:none" href="'+smsHref(p)+'">Text</a>':'')+'<button class="pill" data-rm="'+i+'">Remove</button></div>'}).join(""):'<div><p class="small">No one yet. Add someone below.</p></div>')+'</div>'+
+    (S.circle.length<3?'<div class="card mt12"><h3>Add someone</h3><input id="cName" class="mt12" placeholder="Name (e.g. Jordan)" maxlength="24"><input id="cRel" class="mt8" placeholder="Relationship (e.g. Friend, Sponsor)" maxlength="24"><input id="cPhone" class="mt8" type="tel" inputmode="tel" placeholder="Mobile number (stays on this device)" maxlength="24"><button class="btn soft mt12" style="height:46px" data-act="addCircle">+ Add to Circle</button></div>':'<p class="small mt12">Your Circle is full (3 people max keeps it personal).</p>')+
+    '<h2 class="mt24" style="font-size:17px">What they\'ll get</h2><p class="small mt8">The text'+(f?" "+esc(f.name)+" would get":"")+'. No scores, no details, no alarms. You can edit it before sending.</p>'+
+    '<div class="phoneMock mt12"><div class="small" style="text-align:center;margin-bottom:10px">Text message · from you</div>'+
+      '<div class="bubble" style="margin-left:0;background:#2a3463;border-radius:20px 20px 20px 6px">'+esc(circleMsg(f))+'</div></div>'+
+    '<div class="card mt12"><div class="row"><div class="ico">🛡️</div><div class="grow"><h3>Rules Drift follows</h3><p class="small" style="margin-top:4px;font-size:12.5px">Only suggests a text on a day well off your normal · max once a day · nothing is sent unless you press send · never shares why · emergencies always go to 988, not friends.</p></div></div></div>'+
+    '<p class="disclaim">Names and numbers are saved only in this browser.</p></div>';
+}
+function field(s){
+  var v=todayLog()[s.id];
+  if(s.unit==="time")return '<label class="small" style="display:block;margin-top:12px">'+s.ico+' '+s.q+'<input type="time" class="mt8" data-f="'+s.id+'" value="'+numToTime(v)+'"></label>';
+  return '<label class="small" style="display:block;margin-top:12px">'+s.ico+' '+s.q+'<input type="number" inputmode="decimal" min="0" max="'+s.max+'" step="'+s.step+'" class="mt8" data-f="'+s.id+'" value="'+(v==null?"":v)+'"></label>';
 }
 function vMood(){
-  var M=[[1,"😞","Really low"],[2,"😕","Low"],[3,"😐","Okay"],[4,"🙂","Good"],[5,"😄","Great"]];
-  return '<div class="fade">'+header()+'<h1>Daily check-in</h1><p class="mt8">One tap. How are you feeling right now?</p>'+
-    '<div class="moods mt16">'+M.map(function(m){return '<button data-mood="'+m[0]+'" class="'+(S.mood===m[0]?"sel":"")+'"><span>'+m[1]+'</span>'+m[2]+'</button>'}).join("")+'</div>'+
-    (S.mood?'<div class="card mt16 fade"><h3>'+(S.mood>=4?"Love that. Logged for today.":S.mood===3?"Thanks for checking in. Logged.":"Thanks for being honest. That takes something.")+'</h3><p class="small mt8">'+(S.mood<=2?"Rough days happen. Drift will go easy on you today. If it feels like more than a rough day, help is right here.":"Check-ins help Drift learn your normal.")+'</p>'+(S.mood<=2?'<button class="btn warn mt12" style="height:46px" data-go="crisis">Talk to someone now: 988</button>':'')+'</div>':'')+
+  var M=[[1,"😞","Really low"],[2,"😕","Low"],[3,"😐","Okay"],[4,"🙂","Good"],[5,"😄","Great"]],mood=todayLog().mood;
+  var fs=SIGNALS.filter(function(s){return s.id!=="mood"&&S.consents[s.cat]});
+  return '<div class="fade">'+header()+'<h1>Daily check-in</h1>'+
+    (S.consents.mood?'<p class="mt8">One tap. How are you feeling right now?</p><div class="moods mt16">'+M.map(function(m){return '<button data-mood="'+m[0]+'" class="'+(mood===m[0]?"sel":"")+'"><span>'+m[1]+'</span>'+m[2]+'</button>'}).join("")+'</div>':'')+
+    (mood?'<div class="card mt16 fade"><h3>'+(mood>=4?"Love that. Logged for today.":mood===3?"Thanks for checking in. Logged.":"Thanks for being honest. That takes something.")+'</h3><p class="small mt8">'+(mood<=2?"Rough days happen. If it feels like more than a rough day, help is right here.":"Check-ins help Drift learn your normal.")+'</p>'+(mood<=2?'<button class="btn warn mt12" style="height:46px" data-go="crisis">Talk to someone now: 988</button>':'')+'</div>':'')+
+    (fs.length?'<div class="card mt16"><h3>Today\'s numbers</h3><p class="small mt8">Fill in what you know. Blank is fine. Your phone\'s Screen Time / Digital Wellbeing and Health / Fit apps show these.</p>'+fs.map(field).join("")+'<button class="btn mt16" data-act="saveLog">Save today</button><p class="small mt8" id="saved" aria-live="polite"></p></div>':'')+
     '<div class="card mt16"><h3>Is anything heavier going on?</h3><p class="small mt8">If you\'re thinking about hurting yourself, or feel unsafe, you don\'t have to wait for a pattern.</p><button class="btn ghost mt12" style="height:46px;border-color:rgba(255,138,122,.5);color:#ffb3a8" data-go="crisis">I\'m not okay right now</button></div>'+
-    '<p class="disclaim">Your answer stays on your phone and is only used for your own baseline.</p></div>';
+    '<div class="card mt16"><h3>Your data</h3><p class="small mt8">'+loggedDays().length+' days logged, all in this browser.</p>'+
+      '<input id="setName" class="mt12" placeholder="Your first name (optional)" maxlength="24" value="'+esc(S.name)+'">'+
+      '<div class="row mt12" style="flex-wrap:wrap;gap:8px"><button class="btn soft" style="height:44px;font-size:14px" data-act="saveName">Save name</button><button class="btn soft" style="height:44px;font-size:14px" data-act="reminder">📅 Daily reminder</button><button class="btn soft" style="height:44px;font-size:14px" data-act="export">⬇ Export</button><label class="btn soft" style="height:44px;font-size:14px;cursor:pointer">⬆ Import<input type="file" id="imp" accept="application/json" style="display:none"></label><button class="btn ghost" style="height:44px;font-size:14px;color:#ffb3a8" data-act="wipe">Delete everything</button></div>'+
+      '<p class="small mt8">Change which signals you track: <button class="pill" data-act="consents">Edit signals</button></p></div>'+
+    '<p class="disclaim">Your answers stay on this device and are only used for your own baseline.</p></div>';
 }
 function vCrisis(){
   return '<div class="fade" style="text-align:center;padding-top:6px">'+
@@ -343,26 +378,29 @@ function vCrisis(){
     '<p class="mt12" style="padding:0 8px">Talk to a trained counselor right now, by call or text. Anytime, about anything: stress, substance use, thoughts of suicide.</p>'+
     '<a href="tel:988" class="btn warn mt24" style="text-decoration:none;height:58px;font-size:18px">📞 Call 988</a>'+
     '<a href="sms:988" class="btn soft mt12" style="text-decoration:none;height:58px;font-size:18px">💬 Text 988</a>'+
-    '<a href="https://988lifeline.org/chat/" class="btn ghost mt12" style="text-decoration:none">Chat online at 988lifeline.org</a>'+
+    '<a href="https://988lifeline.org/chat/" target="_blank" rel="noopener" class="btn ghost mt12" style="text-decoration:none">Chat online at 988lifeline.org</a>'+
     '<div class="card mt24" style="text-align:left"><div class="row"><div class="ico">🚨</div><div class="grow"><h3>In immediate danger?</h3><p class="small" style="margin-top:2px">Call 911 or go to the nearest emergency room.</p></div><a href="tel:911" class="pill" style="text-decoration:none;color:var(--hot)">Call 911</a></div></div>'+
-    '<div class="card mt12" style="text-align:left"><div class="row"><div class="ico">🎖️</div><div class="grow"><h3>Veterans</h3><p class="small" style="margin-top:2px">Call 988 and press 1, or text 838255.</p></div></div></div>'+
-    (S.circle.length?'<div class="card mt12" style="text-align:left"><div class="row"><div class="av" style="background:'+COLORS[0]+'">'+esc(S.circle[0].name[0])+'</div><div class="grow"><h3>Reach '+esc(S.circle[0].name)+'</h3><p class="small" style="margin-top:2px">Someone from your Circle.</p></div><span class="pill">demo</span></div></div>':'')+
+    '<div class="card mt12" style="text-align:left"><div class="row"><div class="ico">🎖️</div><div class="grow"><h3>Veterans</h3><p class="small" style="margin-top:2px">Call 988 and press 1, or text 838255.</p></div><a href="sms:838255" class="pill" style="text-decoration:none">Text</a></div></div>'+
+    S.circle.map(function(p,i){return '<div class="card mt12" style="text-align:left"><div class="row"><div class="av" style="background:'+COLORS[i%4]+'">'+esc(p.name[0])+'</div><div class="grow"><h3>Reach '+esc(p.name)+'</h3><p class="small" style="margin-top:2px">Someone from your Circle.</p></div>'+(p.phone?'<a class="pill" style="text-decoration:none" href="tel:'+esc(p.phone.replace(/[^\d+]/g,""))+'">Call</a>':'')+'</div></div>'}).join("")+
     '<p class="disclaim">Drift is not an emergency service and does not provide medical or crisis care.</p></div>';
 }
-
-// --- toast (push-style notification preview)
 function showToast(){
-  var n=NUDGES.filter(function(x){return x.id===S.activeNudge})[0];if(!n)return;
+  var a=S.activeNudge,n=a&&NUDGES.filter(function(x){return x.id===a.id})[0];if(!n)return;
   var t=document.getElementById("toast");
-  t.innerHTML='<div class="row"><div class="logo" style="font-size:13px"><i style="width:18px;height:18px"></i>DRIFT</div><span class="small" style="margin-left:auto">now</span></div><div class="row mt8" style="align-items:flex-start"><span style="font-size:22px">'+n.ico+'</span><div class="grow"><h3>Hey Alex, '+n.t.charAt(0).toLowerCase()+n.t.slice(1)+'?</h3><p class="small" style="margin-top:2px;color:var(--mute)">Today looks different from your usual. Tap to see.</p></div></div>';
+  t.innerHTML='<div class="row"><div class="logo" style="font-size:13px"><i style="width:18px;height:18px"></i>DRIFT</div><span class="small" style="margin-left:auto">now</span></div><div class="row mt8" style="align-items:flex-start"><span style="font-size:22px">'+n.ico+'</span><div class="grow"><h3>'+(S.name?"Hey "+esc(S.name)+", ":"")+n.t.charAt(0).toLowerCase()+n.t.slice(1)+'?</h3><p class="small" style="margin-top:2px;color:var(--mute)">Today looks different from your usual. Tap to see.</p></div></div>';
   t.classList.add("show");
   t.onclick=function(){t.classList.remove("show");go("today");setTimeout(function(){var c=document.getElementById("nudgeCard");if(c)c.scrollIntoView({behavior:"smooth",block:"center"})},50)};
   setTimeout(function(){t.classList.remove("show")},5200);
 }
+function download(name,text,type){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
+function reminderICS(){
+  var d=new Date();d.setHours(21,0,0,0);function z(n){return("0"+n).slice(-2)}
+  var st=d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+"T210000",en=d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+"T210500";
+  return ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Drift//EN","BEGIN:VEVENT","UID:drift-daily-"+Date.now()+"@drift","DTSTAMP:"+new Date().toISOString().replace(/[-:]|\.\d+/g,""),"DTSTART:"+st,"DTEND:"+en,"RRULE:FREQ=DAILY","SUMMARY:Drift check-in (1 minute)","DESCRIPTION:"+location.href.split("#")[0]+"#mood","BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Drift check-in","TRIGGER:PT0M","END:VALARM","END:VEVENT","END:VCALENDAR"].join("\r\n");
+}
 
-// --- router
 var route="",obStep=0,prev="today";
-function go(r){if(r!=="crisis"&&route!=="crisis")prev=route||"today";if(r==="crisis"&&route!=="crisis")prev=route||"today";route=r;render();var v=document.getElementById("view");v.scrollTop=0;
+function go(r){if(r==="crisis"&&route!=="crisis")prev=route||"today";else if(r!=="crisis"&&route!=="crisis")prev=route||"today";route=r;render();var v=document.getElementById("view");v.scrollTop=0;
   var h="#"+r;if(location.hash!==h)history.replaceState(null,"",h)}
 function render(){
   var tt=document.getElementById("toast");if(tt&&route!=="today")tt.classList.remove("show");
@@ -376,35 +414,46 @@ function render(){
     html=route==="trends"?vTrends():route==="circle"?vCircle():route==="mood"?vMood():vToday()}
   v.innerHTML=html;
 }
+function afterLog(){var fresh=evaluate();save();if(fresh){go("today");setTimeout(showToast,400)}}
+document.addEventListener("change",function(e){
+  if(e.target&&e.target.id==="imp"){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var j=JSON.parse(r.result);if(!j||typeof j.logs!=="object")throw 0;var d=defaults();for(var k in d)if(j[k]===undefined)j[k]=d[k];S=j;save();render();alert("Imported "+loggedDays().length+" days.")}catch(x){alert("That file isn't a Drift export.")}};r.readAsText(f)}
+});
 document.addEventListener("click",function(e){
   var el=e.target.closest("[data-go],[data-ob],[data-tog],[data-act],[data-nudge],[data-mood],[data-rm],[data-back]");if(!el)return;
   var d=el.dataset;
   if(d.go){go(d.go);return}
-  if(d.back){go(prev&&prev!=="crisis"?prev:"today");return}
-  if(d.ob){if(d.ob==="done"){S.onboarded=true;save();go("today")}else{obStep=+d.ob;render();document.getElementById("view").scrollTop=0}return}
+  if(d.back){go(prev&&prev!=="crisis"&&prev!=="onboard"?prev:(S.onboarded?"today":"onboard"));return}
+  if(d.ob){if(d.ob==="done"){var nm=document.getElementById("obName");if(nm)S.name=nm.value.trim();S.onboarded=true;save();go("today")}else{obStep=+d.ob;render();document.getElementById("view").scrollTop=0}return}
   if(d.tog){S.consents[d.tog]=!S.consents[d.tog];save();el.classList.toggle("on");return}
-  if(d.nudge){var id=S.activeNudge;if(!id)return;var st=S.nudgeStats[id];
+  if(d.nudge){var a=S.activeNudge;if(!a)return;var st=S.nudgeStats[a.id];
     if(d.nudge==="done")st.done++;else st.skip++;
-    S.nudgeLog.push({id:id,r:d.nudge,t:Date.now()});S.activeNudge=null;save();
+    S.nudgeLog.push({id:a.id,r:d.nudge,t:Date.now(),date:TODAY});S.activeNudge=null;save();
     var c=document.getElementById("nudgeCard");
     if(c){c.innerHTML='<div class="row"><div class="ico" style="font-size:22px">'+(d.nudge==="done"?"🌱":"👌")+'</div><div class="grow"><h3>'+(d.nudge==="done"?"Nice. Logged as something that works for you.":"No problem. Drift will try something else next time.")+'</h3><p class="small" style="margin-top:2px">See <b>What works for you</b> in Trends.</p></div></div>'}
     return}
-  if(d.mood){S.mood=+d.mood;save();if(S.mood===1){go("crisis")}else render();return}
-  if(d.rm){S.circle.splice(+d.rm,1);save();render();return}
-  if(d.act==="rough"){applyRough(!S.rough);render();document.getElementById("view").scrollTop=0;return}
-  if(d.act==="sendCircle"){S.circleSent=true;save();render();return}
+  if(d.mood){var l=S.logs[TODAY]||(S.logs[TODAY]={});l.mood=+d.mood;save();if(l.mood===1){go("crisis")}else{render();afterLog()}return}
+  if(d.rm){if(!confirm("Remove "+S.circle[+d.rm].name+" from your Circle?"))return;S.circle.splice(+d.rm,1);save();render();return}
+  if(d.act==="saveLog"){var lg=S.logs[TODAY]||(S.logs[TODAY]={});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-f]"),function(inp){var id=inp.dataset.f,v=inp.value;
+      if(v===""){delete lg[id];return}
+      if(inp.type==="time")lg[id]=timeToNum(v,id==="bed");else{var n=parseFloat(v);if(!isNaN(n)&&n>=0)lg[id]=n}});
+    save();var sv=document.getElementById("saved");if(sv)sv.textContent="Saved for "+new Date().toLocaleDateString()+".";afterLog();return}
+  if(d.act==="sendCircle"){S.circleSent=TODAY;save();setTimeout(render,300);return}
   if(d.act==="pause"){S.circlePaused=true;save();render();return}
   if(d.act==="unpause"){S.circlePaused=false;save();render();return}
-  if(d.act==="addCircle"){var n=document.getElementById("cName").value.trim(),r=document.getElementById("cRel").value.trim();if(!n){document.getElementById("cName").focus();return}if(S.circle.length>=3)return;S.circle.push({name:n,rel:r||"Trusted person"});save();render();return}
+  if(d.act==="addCircle"){var n=document.getElementById("cName").value.trim(),r=document.getElementById("cRel").value.trim(),p=document.getElementById("cPhone").value.trim();if(!n){document.getElementById("cName").focus();return}if(S.circle.length>=3)return;S.circle.push({name:n,rel:r||"Trusted person",phone:p});save();render();return}
+  if(d.act==="saveName"){S.name=document.getElementById("setName").value.trim();save();render();return}
+  if(d.act==="export"){download("drift-"+TODAY+".json",JSON.stringify(S,null,1),"application/json");return}
+  if(d.act==="reminder"){download("drift-reminder.ics",reminderICS(),"text/calendar");return}
+  if(d.act==="consents"){obStep=1;S.onboarded=false;save();render();return}
+  if(d.act==="wipe"){if(!confirm("Delete all your Drift data from this browser? This can't be undone."))return;S=defaults();save();obStep=0;go("onboard");return}
 });
-window.addEventListener("hashchange",function(){var p=parseHash();if(p.route&&p.route!==route)go(p.route)});
-var r0=init.route;
-if(r0==="onboard"){S.onboarded=false;obStep=+(init.q.step||0)}
-route=r0||(S.onboarded?"today":"onboard");
+window.addEventListener("hashchange",function(){var p=parseHash();if(p.route&&p.route!==route&&p.route!=="onboard")go(p.route)});
+var r0=parseHash().route;
+route=(r0&&r0!=="onboard")?r0:(S.onboarded?"today":"onboard");
 if(!S.onboarded&&route!=="crisis")route="onboard";
 render();
-if(init.q.toast)setTimeout(showToast,300);
-window.__drift={state:function(){return S},reset:function(){S=defaults();save();obStep=0;go("onboard")}};
+window.__drift={state:function(){return S}};
 })();
 </script>
 <script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
