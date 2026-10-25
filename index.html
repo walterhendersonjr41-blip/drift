@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>Drift: prototype</title>
+<style>
+:root{
+  --bg:#0b1020;--bg2:#111833;--card:#151d3b;--card2:#1b2550;--line:#26315f;
+  --text:#e9ecf8;--mute:#9aa3c7;--dim:#6b75a0;
+  --calm:#6ee7c8;--sky:#7aa7ff;--warm:#ffc773;--hot:#ff8a7a;--violet:#b49cff;
+  --r:20px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#05070f;color:var(--text)}
+body{display:flex;justify-content:center;align-items:flex-start}
+#phone{position:relative;width:100%;max-width:430px;min-height:100vh;background:
+  radial-gradient(120% 60% at 50% -10%,#1d2a63 0%,rgba(29,42,99,0) 60%),var(--bg);overflow:hidden}
+@media(min-width:520px){body{align-items:center;padding:24px}#phone{min-height:844px;height:844px;max-width:390px;border-radius:44px;box-shadow:0 0 0 10px #161a2c,0 30px 80px rgba(0,0,0,.6)}}
+.scroll{position:absolute;inset:0;overflow-y:auto;padding:18px 20px 104px}
+.scroll.noTabs{padding-bottom:30px}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+h1{font-size:28px;letter-spacing:-.02em;font-weight:700}
+h2{font-size:20px;letter-spacing:-.01em;font-weight:650}
+h3{font-size:15px;font-weight:600}
+p{line-height:1.5;color:var(--mute);font-size:14.5px}
+.small{font-size:12.5px;color:var(--dim)}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.card{background:linear-gradient(180deg,var(--card),#131a36);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mt24{margin-top:24px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:52px;border-radius:16px;font-weight:650;font-size:16px;background:var(--calm);color:#062a22}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.soft{background:var(--card2);color:var(--text)}
+.btn.warn{background:var(--hot);color:#2b0b06}
+.btn:active{transform:scale(.98)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--card2);color:var(--mute)}
+.demo{background:rgba(255,199,115,.14);color:var(--warm);border:1px solid rgba(255,199,115,.35)}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;letter-spacing:-.01em}
+.logo i{width:22px;height:22px;border-radius:50%;background:conic-gradient(from 200deg,var(--calm),var(--sky),var(--violet),var(--calm));display:block;box-shadow:0 0 18px rgba(110,231,200,.45)}
+.help{font-size:12.5px;font-weight:600;color:var(--hot);border:1px solid rgba(255,138,122,.4);padding:6px 10px;border-radius:999px}
+/* tabs */
+#tabs{position:absolute;left:0;right:0;bottom:0;height:84px;padding:8px 14px 22px;display:flex;justify-content:space-around;background:rgba(11,16,32,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);z-index:5}
+#tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--dim);font-weight:600}
+#tabs button svg{width:24px;height:24px}
+#tabs button.on{color:var(--calm)}
+/* toggles */
+.tog{position:relative;width:50px;height:30px;border-radius:999px;background:#2a3463;flex:none;transition:.2s}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s}
+.tog.on{background:var(--calm)}.tog.on::after{left:23px}
+.list>div{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.list>div:last-child{border-bottom:0}
+.ico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;font-size:18px;background:var(--card2)}
+.grow{flex:1;min-width:0}
+/* gauge */
+.gaugeWrap{position:relative;display:flex;justify-content:center}
+.gaugeTxt{position:absolute;top:50px;text-align:center;width:100%}
+.gaugeTxt b{font-size:48px;font-weight:700;letter-spacing:-.03em;display:block;line-height:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sig{padding:13px;border-radius:16px;background:var(--card);border:1px solid var(--line)}
+.sig .v{font-size:19px;font-weight:650;margin-top:6px;letter-spacing:-.01em}
+.sig .b{font-size:11.5px;color:var(--dim);margin-top:2px}
+.bar{height:5px;border-radius:9px;background:#26315f;margin-top:10px;overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:9px}
+.sig.off{opacity:.45}
+/* nudge */
+.nudge{position:relative;overflow:hidden;background:linear-gradient(135deg,#1e2c66,#1a2350 60%,#202a5c);border:1px solid #34408a}
+.nudge::before{content:"";position:absolute;right:-40px;top:-40px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(110,231,200,.25),transparent 70%)}
+.toast{position:absolute;left:12px;right:12px;top:12px;z-index:20;padding:14px;border-radius:20px;background:rgba(32,40,80,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid #3a4690;box-shadow:0 12px 40px rgba(0,0,0,.5);transform:translateY(-140%);transition:transform .45s cubic-bezier(.2,.9,.3,1.2)}
+.toast.show{transform:none}
+/* mood */
+.moods{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.moods button{padding:14px 0 10px;border-radius:16px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;color:var(--mute)}
+.moods button span{font-size:28px}
+.moods button.sel{border-color:var(--calm);background:#173a44;color:var(--text)}
+/* circle */
+.av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#0b1020;flex:none}
+input{width:100%;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--text);padding:0 14px;font:inherit;font-size:15px;outline:none}
+input:focus{border-color:var(--sky)}
+.bubble{background:#2b6cf6;color:#fff;border-radius:20px 20px 6px 20px;padding:12px 14px;font-size:14.5px;line-height:1.45;max-width:88%;margin-left:auto}
+.phoneMock{background:#0e1430;border:1px solid var(--line);border-radius:18px;padding:14px}
+/* crisis */
+.crisis{background:radial-gradient(120% 70% at 50% 0%,#3a1630 0%,rgba(58,22,48,0) 70%),var(--bg)}
+.big988{font-size:84px;font-weight:800;letter-spacing:-.04em;line-height:1;background:linear-gradient(180deg,#fff,#ffc9c0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.fade{animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.works .bar{height:8px;margin-top:6px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.seg{display:flex;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{flex:1;height:34px;border-radius:9px;font-size:13px;font-weight:600;color:var(--mute)}
+.seg button.on{background:var(--card2);color:var(--text)}
+.disclaim{font-size:11.5px;color:var(--dim);text-align:center;line-height:1.5;margin-top:18px}
+</style>
+</head>
+<body>
+<div id="phone">
+  <div id="view" class="scroll"></div>
+  <div id="toast" class="toast"></div>
+  <nav id="tabs"></nav>
+</div>
+<script>
+(function(){
+"use strict";
+var KEY="drift.prototype.v1";
+var SIGNALS=[
+  {id:"bed",cat:"sleep",ico:"🌙",name:"Bedtime",unit:"time",base:23.2,norm:23.4,rough:25.7,scale:2.5,bad:"up"},
+  {id:"wake",cat:"sleep",ico:"🌅",name:"Wake time",unit:"time",base:7.0,norm:7.15,rough:8.5,scale:2.5,bad:"up"},
+  {id:"screen",cat:"screen",ico:"📱",name:"Screen time",unit:"h",base:3.2,norm:3.4,rough:4.95,scale:3.5,bad:"up"},
+  {id:"late",cat:"late",ico:"🕒",name:"After-midnight use",unit:"m",base:10,norm:6,rough:41,scale:70,bad:"up"},
+  {id:"social",cat:"apps",ico:"🌀",name:"Scrolling apps",unit:"h",base:1.1,norm:1.0,rough:2.475,scale:2.5,bad:"up"},
+  {id:"steps",cat:"steps",ico:"👟",name:"Steps",unit:"n",base:6800,norm:6400,rough:3300,scale:5000,bad:"down"},
+  {id:"texts",cat:"texts",ico:"💬",name:"Texts returned",unit:"n",base:9,norm:8,rough:4,scale:7,bad:"down"},
+  {id:"mood",cat:"mood",ico:"🙂",name:"Mood check-in",unit:"mood",base:4,norm:4,rough:3,scale:2.5,bad:"down"}
+];
+var CONSENTS=[
+  {id:"sleep",ico:"🌙",t:"Sleep & wake times",d:"From your phone's health data. Times only."},
+  {id:"screen",ico:"📱",t:"Total screen time",d:"Daily minutes. Never what's on screen."},
+  {id:"late",ico:"🕒",t:"Late-night phone use",d:"Minutes after midnight."},
+  {id:"apps",ico:"🌀",t:"App categories",d:"Social / scrolling vs. other. No app content."},
+  {id:"steps",ico:"👟",t:"Step count",d:"Daily total from your phone."},
+  {id:"texts",ico:"💬",t:"How often you text back",d:"A count only. Messages are never read."},
+  {id:"mood",ico:"🙂",t:"Daily 1-tap mood check-in",d:"You choose how you feel, once a day."}
+];
+var NUDGES=[
+  {id:"walk",ico:"🚶",t:"Take a 10-minute walk",d:"Your steps are way down today. A short loop outside usually resets your afternoon."},
+  {id:"call",ico:"📞",t:"Call someone you trust",d:"You've barely texted anyone back today. A 5-minute call with Maya could help."},
+  {id:"bed",ico:"🛏️",t:"Phone down by 11:30",d:"You were up until almost 2 AM. An early night tends to make tomorrow easier for you."},
+  {id:"meeting",ico:"🤝",t:"Check in with your group",d:"Reach out to your sponsor or go to a meeting today, even a short one."}
+];
+var DEMO_CIRCLE=[{name:"Maya",rel:"Sister",phone:"(demo)"},{name:"Coach Ray",rel:"Sponsor",phone:"(demo)"}];
+var COLORS=["#6ee7c8","#7aa7ff","#b49cff","#ffc773"];
+
+function defaults(){
+  var c={};CONSENTS.forEach(function(x){c[x.id]=true});
+  return {onboarded:false,consents:c,rough:false,circle:DEMO_CIRCLE.slice(),
+    nudgeStats:{walk:{done:3,skip:1},call:{done:2,skip:1},bed:{done:1,skip:3},meeting:{done:2,skip:0}},
+    activeNudge:null,nudgeLog:[],mood:null,circleSent:false,circlePaused:false};
+}
+var S;
+try{S=JSON.parse(localStorage.getItem(KEY))||defaults()}catch(e){S=defaults()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+// URL shortcuts for demos/screenshots: #today?rough=1&fresh=1
+function parseHash(){
+  var h=location.hash.replace(/^#/,"");var parts=h.split("?");var q={};
+  (parts[1]||"").split("&").forEach(function(kv){if(kv){var p=kv.split("=");q[p[0]]=p[1]||"1"}});
+  return {route:parts[0]||"",q:q};
+}
+var init=parseHash();
+if(init.q.fresh){S=defaults()}
+if(init.q.onboarded){S.onboarded=true}
+if(init.q.rough){S.onboarded=true;applyRough(true,true)}
+
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function fmt(sig,v){
+  if(sig.unit==="time"){var h=v%24,hh=Math.floor(h),mm=Math.round((h-hh)*60);if(mm===60){hh++;mm=0}var ap=hh>=12?"PM":"AM";var h12=hh%12||12;return h12+":"+(mm<10?"0":"")+mm+" "+ap}
+  if(sig.unit==="h"){var H=Math.floor(v),M=Math.round((v-H)*60);return H+"h "+M+"m"}
+  if(sig.unit==="m")return Math.round(v)+" min";
+  if(sig.unit==="mood")return ["","Really low","Low","Okay","Good","Great"][Math.round(v)]||"-";
+  return Math.round(v).toLocaleString();
+}
+function todayVal(sig){
+  if(sig.id==="mood"&&S.mood)return S.mood;
+  return S.rough?sig.rough:sig.norm;
+}
+function dev(sig){
+  var d=(todayVal(sig)-sig.base)/sig.scale; if(sig.bad==="down")d=-d;
+  return Math.max(0,Math.min(1,d));
+}
+function active(){return SIGNALS.filter(function(s){return S.consents[s.cat]})}
+function driftScore(){
+  var a=active();if(!a.length)return 0;
+  var sum=0;a.forEach(function(s){sum+=dev(s)});
+  var base=sum/a.length*100;
+  var n=a.filter(function(s){return dev(s)>=.5}).length;
+  // several signals moving together count more than one outlier
+  var boost=n>=3?12:0;
+  return Math.round(Math.max(8,Math.min(96,base+boost)));
+}
+function drifting(){return active().filter(function(s){return dev(s)>=.5})}
+function level(sc){return sc<35?{t:"Steady",c:"var(--calm)",hex:"#6ee7c8",d:"You're close to your normal week."}:sc<60?{t:"Drifting a little",c:"var(--warm)",hex:"#ffc773",d:"A few things are off your usual pattern."}:{t:"Drifting",c:"var(--hot)",hex:"#ff8a7a",d:"Several signals moved away from your normal together."}}
+function trend(){
+  var t=driftScore();
+  return S.rough?[22,18,25,31,46,58,t]:[22,18,25,20,16,24,t];
+}
+function pickNudge(){
+  // learn what works: success rate with a small prior, filtered by what's drifting
+  var dr=drifting().map(function(s){return s.id});
+  var rel={walk:dr.indexOf("steps")>=0,call:dr.indexOf("texts")>=0,bed:dr.indexOf("bed")>=0||dr.indexOf("late")>=0,meeting:dr.length>=7};
+  var best=null,bs=-1;
+  NUDGES.forEach(function(n){var st=S.nudgeStats[n.id];var r=(st.done+1)/(st.done+st.skip+2)+(rel[n.id]?.15:0);if(r>bs){bs=r;best=n}});
+  return best.id;
+}
+function applyRough(on,silent){
+  S.rough=on;
+  if(on){S.activeNudge=pickNudge();S.circleSent=false;S.mood=S.mood&&S.mood<=3?S.mood:null}
+  else{S.activeNudge=null;S.circleSent=false;S.mood=null}
+  save();
+  if(!silent&&on)setTimeout(function(){showToast()},600);
+}
+
+// --- icons
+var I={
+  today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1.5" fill="currentColor"/></svg>',
+  trends:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg>',
+  circle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="8" r="2.5"/><path d="M16 13.2A4.5 4.5 0 0 1 21 18"/></svg>',
+  mood:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/></svg>'
+};
+function tabs(cur){
+  var t=[["today","Today"],["trends","Trends"],["circle","Circle"],["mood","Check-in"]];
+  document.getElementById("tabs").innerHTML=t.map(function(x){return '<button data-go="'+x[0]+'" class="'+(cur===x[0]?"on":"")+'">'+I[x[0]]+x[1]+'</button>'}).join("");
+}
+function header(){
+  return '<div class="top"><div class="logo"><i></i>Drift</div><div class="row"><span class="pill demo">DEMO DATA</span><button class="help" data-go="crisis">Need help now?</button></div></div>';
+}
+
+// --- screens
+function vOnboard(step){
+  step=step||0;
+  if(step===0)return '<div class="fade" style="padding-top:40px">'+
+    '<div class="logo" style="font-size:22px"><i style="width:30px;height:30px"></i>Drift</div>'+
+    '<h1 class="mt24" style="font-size:34px;line-height:1.1">Catch the slide<br>before it starts.</h1>'+
+    '<p class="mt16">Drift learns what a normal week looks like for <b style="color:var(--text)">you</b>. When several things shift at once, like sleep, steps, late-night scrolling, or going quiet with friends, it sends one small nudge to help you get back on track.</p>'+
+    '<div class="card mt24"><div class="row"><div class="ico">🔒</div><div class="grow"><h3>You\'re in control</h3><p class="small mt8" style="font-size:13px">Every signal is opt-in. Drift never reads your messages, posts or screen content. Pause or delete anytime.</p></div></div></div>'+
+    '<div class="card mt12"><div class="row"><div class="ico">🤝</div><div class="grow"><h3>Support, not diagnosis</h3><p class="small mt8" style="font-size:13px">Drift is a wellness support tool. It isn\'t a medical device and doesn\'t diagnose anything.</p></div></div></div>'+
+    '<button class="btn mt24" data-ob="1">Get started</button>'+
+    '<p class="disclaim">Prototype · all data shown is simulated demo data</p></div>';
+  if(step===1)return '<div class="fade" style="padding-top:12px">'+
+    '<p class="small">Step 1 of 2</p><h1 class="mt8">What can Drift notice?</h1>'+
+    '<p class="mt8">Turn on only what you\'re comfortable with. More signals make it more accurate, but any mix works.</p>'+
+    '<div class="card mt16 list" style="padding:4px 16px">'+CONSENTS.map(function(c){
+      return '<div><div class="ico">'+c.ico+'</div><div class="grow"><h3>'+c.t+'</h3><div class="small" style="margin-top:2px">'+c.d+'</div></div><button class="tog '+(S.consents[c.id]?"on":"")+'" data-tog="'+c.id+'" aria-label="'+c.t+'"></button></div>'}).join("")+'</div>'+
+    '<button class="btn mt16" data-ob="2">Continue</button></div>';
+  return '<div class="fade" style="padding-top:12px">'+
+    '<p class="small">Step 2 of 2</p><h1 class="mt8">Learning your normal</h1>'+
+    '<p class="mt8">For the first 14 days Drift just watches quietly to learn your baseline. No nudges until it knows you.</p>'+
+    '<div class="card mt16"><div class="row between"><h3>Baseline progress</h3><span class="pill demo">demo: skipped ahead</span></div><div class="bar" style="height:10px"><i style="width:100%;background:linear-gradient(90deg,var(--calm),var(--sky))"></i></div><p class="small mt8">14 of 14 days learned (simulated)</p></div>'+
+    '<div class="card mt12"><h3>Where your data lives</h3><p class="small mt8" style="font-size:13px">Baselines are computed on your phone. Only you see your signals. Your Circle only ever gets a short, kind check-in message, never your data. Your program or employer only sees anonymous group trends, if you agree.</p></div>'+
+    '<button class="btn mt24" data-ob="done">Open my dashboard</button></div>';
+}
+
+function gauge(sc){
+  var L=level(sc);var R=86,cx=110,cy=110,start=Math.PI,span=Math.PI;
+  function pt(f){var a=start+span*f;return [cx+R*Math.cos(a),cy+R*Math.sin(a)]}
+  var p0=pt(0),p1=pt(1),pv=pt(sc/100);
+  var bandEnd=pt(.3);
+  return '<div class="gaugeWrap"><svg width="220" height="146" viewBox="0 0 220 146">'+
+    '<defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="#6ee7c8"/><stop offset=".5" stop-color="#ffc773"/><stop offset="1" stop-color="#ff8a7a"/></linearGradient></defs>'+
+    '<path d="M'+p0+' A'+R+' '+R+' 0 0 1 '+p1+'" stroke="#26315f" stroke-width="14" fill="none" stroke-linecap="round"/>'+
+    '<path d="M'+p0+' A'+R+' '+R+' 0 0 1 '+bandEnd+'" stroke="rgba(110,231,200,.22)" stroke-width="26" fill="none"/>'+
+    '<path d="M'+p0+' A'+R+' '+R+' 0 0 1 '+pv+'" stroke="url(#gg)" stroke-width="14" fill="none" stroke-linecap="round"/>'+
+    '<circle cx="'+pv[0]+'" cy="'+pv[1]+'" r="9" fill="#0b1020" stroke="'+L.hex+'" stroke-width="4"/>'+
+    '<text x="24" y="138" fill="#6b75a0" font-size="10.5" text-anchor="middle">normal</text><text x="196" y="138" fill="#6b75a0" font-size="10.5" text-anchor="middle">far off</text>'+
+    '</svg><div class="gaugeTxt"><b style="color:'+L.c+'">'+sc+'</b><span class="small">Drift score</span></div></div>';
+}
+function sigCard(s){
+  var on=S.consents[s.cat];var d=dev(s);
+  var col=d>=.5?"var(--hot)":d>=.25?"var(--warm)":"var(--calm)";
+  var v=on?(s.id==="mood"&&!S.mood&&!S.rough?"Not yet":fmt(s,todayVal(s))):"Off";
+  return '<div class="sig '+(on?"":"off")+'"><div class="row between"><span style="font-size:16px">'+s.ico+'</span>'+(on&&d>=.5?'<span class="dot" style="background:var(--hot)"></span>':'')+'</div>'+
+    '<div class="small" style="margin-top:6px;color:var(--mute)">'+s.name+'</div><div class="v">'+v+'</div><div class="b">Usual: '+fmt(s,s.base)+'</div>'+
+    '<div class="bar"><i style="width:'+(on?Math.max(6,d*100):0)+'%;background:'+col+'"></i></div></div>';
+}
+function nudgeCard(){
+  var n=NUDGES.filter(function(x){return x.id===S.activeNudge})[0];if(!n)return "";
+  return '<div class="card nudge mt16 fade" id="nudgeCard"><div class="row between"><span class="pill" style="background:rgba(110,231,200,.15);color:var(--calm)">One small thing</span><span class="small">picked for you</span></div>'+
+    '<div class="row mt12" style="align-items:flex-start"><div class="ico" style="background:rgba(255,255,255,.08);font-size:22px;width:46px;height:46px">'+n.ico+'</div><div class="grow"><h2 style="font-size:18px">'+n.t+'</h2><p class="mt8" style="font-size:14px">'+n.d+'</p></div></div>'+
+    '<div class="row mt16"><button class="btn" style="height:46px" data-nudge="done">Done</button><button class="btn ghost" style="height:46px" data-nudge="skip">Not now</button></div>'+
+    '<p class="small mt12">Chosen because it\'s worked for you '+S.nudgeStats[n.id].done+' of '+(S.nudgeStats[n.id].done+S.nudgeStats[n.id].skip)+' times.</p></div>';
+}
+function circleCard(){
+  if(!S.rough||!S.circle.length)return "";
+  var f=S.circle[0];
+  if(S.circlePaused)return '<div class="card mt12"><div class="row"><div class="ico">⏸️</div><div class="grow"><h3>Circle check-ins paused</h3><p class="small">No one will be notified.</p></div><button class="pill" data-act="unpause">Resume</button></div></div>';
+  return '<div class="card mt12"><div class="row"><div class="av" style="background:'+COLORS[0]+'">'+esc(f.name[0])+'</div><div class="grow"><h3>'+(S.circleSent?"We let "+esc(f.name)+" know":"Your Circle")+'</h3><p class="small" style="margin-top:2px">'+(S.circleSent?"A gentle “check on Alex today” was sent (demo, nothing actually sent).":"You've been sliding for a few days. Drift will ask "+esc(f.name)+" to check in on you tonight. No details are shared.")+'</p></div></div>'+
+    (S.circleSent?'':'<div class="row mt12"><button class="btn soft" style="height:40px;font-size:14px" data-act="sendCircle">Send now</button><button class="btn ghost" style="height:40px;font-size:14px" data-act="pause">Not this time</button></div>')+'</div>';
+}
+function vToday(){
+  var sc=driftScore(),L=level(sc),dr=drifting();
+  return '<div class="fade">'+header()+
+    '<p class="small">'+new Date().toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})+'</p><h1 style="margin-top:2px">Hey, Alex</h1>'+
+    '<div class="card mt16" style="padding:16px 16px 14px">'+gauge(sc)+
+      '<div style="text-align:center;margin-top:6px"><h2 style="color:'+L.c+'">'+L.t+'</h2><p class="mt8" style="font-size:13.5px">'+L.d+(dr.length?' <b style="color:var(--text)">'+dr.length+' of '+active().length+'</b> signals are off.':'')+'</p></div></div>'+
+    nudgeCard()+circleCard()+
+    '<div class="row between mt24"><h2 style="font-size:17px">Today vs. your normal</h2><span class="small">'+active().length+' signals on</span></div>'+
+    '<div class="grid2 mt12">'+SIGNALS.map(sigCard).join("")+'</div>'+
+    '<button class="btn '+(S.rough?"ghost":"warn")+' mt24" data-act="rough">'+(S.rough?"↺ Reset to a normal day":"⚡ Simulate a rough day")+'</button>'+
+    '<p class="disclaim">All numbers are simulated demo data.<br>Drift is a support tool, not a diagnosis or medical device.</p></div>';
+}
+function vTrends(){
+  var d=trend(),W=350,H=190,pl=28,pr=22,pt=14,pb=26;
+  var days=[];for(var i=6;i>=0;i--){var dt=new Date();dt.setDate(dt.getDate()-i);days.push(i===0?"Today":dt.toLocaleDateString(undefined,{weekday:"short"}))}
+  function x(i){return pl+i*(W-pl-pr)/6}function y(v){return pt+(100-v)*(H-pt-pb)/100}
+  var path=d.map(function(v,i){return(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)}).join(" ");
+  var area=path+" L"+x(6)+" "+y(0)+" L"+x(0)+" "+y(0)+"Z";
+  var svg='<svg width="100%" viewBox="0 0 '+W+' '+H+'"><defs><linearGradient id="ar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+(S.rough?"#ff8a7a":"#6ee7c8")+'" stop-opacity=".35"/><stop offset="1" stop-color="#6ee7c8" stop-opacity="0"/></linearGradient></defs>'+
+    '<rect x="'+pl+'" y="'+y(30)+'" width="'+(W-pl-pr)+'" height="'+(y(0)-y(30))+'" fill="rgba(110,231,200,.08)" rx="6"/>'+
+    '<text x="'+(W-pr-6)+'" y="'+(y(0)-6)+'" fill="#6ee7c8" font-size="10" opacity=".8" text-anchor="end">your normal range</text>'+
+    [0,50,100].map(function(v){return '<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="#26315f" stroke-dasharray="3 4"/><text x="'+(pl-6)+'" y="'+(y(v)+3)+'" fill="#6b75a0" font-size="10" text-anchor="end">'+v+'</text>'}).join("")+
+    '<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(60)+'" y2="'+y(60)+'" stroke="#ff8a7a" stroke-opacity=".5" stroke-dasharray="2 3"/><text x="'+(pl+6)+'" y="'+(y(60)-5)+'" fill="#ff8a7a" font-size="9.5" opacity=".8">nudge line</text>'+
+    '<path d="'+area+'" fill="url(#ar)"/><path d="'+path+'" fill="none" stroke="'+(S.rough?"#ffb08a":"#6ee7c8")+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+
+    d.map(function(v,i){return '<circle cx="'+x(i)+'" cy="'+y(v)+'" r="'+(i===6?5.5:3.5)+'" fill="#0b1020" stroke="'+(v>=60?"#ff8a7a":v>=35?"#ffc773":"#6ee7c8")+'" stroke-width="2.5"/>'}).join("")+
+    days.map(function(t,i){return '<text x="'+x(i)+'" y="'+(H-6)+'" fill="'+(i===6?"#e9ecf8":"#6b75a0")+'" font-size="10.5" text-anchor="middle">'+t+'</text>'}).join("")+'</svg>';
+  var tot=0;NUDGES.forEach(function(n){var s=S.nudgeStats[n.id];tot=Math.max(tot,s.done+s.skip)});
+  var works=NUDGES.map(function(n){var s=S.nudgeStats[n.id];return {n:n,s:s,r:(s.done)/(Math.max(1,s.done+s.skip))}}).sort(function(a,b){return b.r-a.r||b.s.done-a.s.done});
+  return '<div class="fade">'+header()+'<h1>Your week</h1><p class="mt8">Drift score for the last 7 days, compared with your own normal range.</p>'+
+    '<div class="card mt16" style="padding:14px 10px 6px">'+svg+'</div>'+
+    '<div class="row mt12" style="gap:8px;flex-wrap:wrap">'+(S.rough?'<span class="pill" style="color:var(--hot)">↗ Rising 4 days in a row</span><span class="pill">Sleep & steps moved first</span>':'<span class="pill" style="color:var(--calm)">● Steady week</span><span class="pill">Best day: '+days[4]+'</span>')+'</div>'+
+    '<h2 class="mt24" style="font-size:17px">What works for you</h2><p class="small mt8">Drift learns from every Done and Not now, and suggests what actually helps you first.</p>'+
+    '<div class="card mt12 works">'+works.map(function(w,i){return '<div style="'+(i?"margin-top:14px":"")+'"><div class="row between"><span style="font-size:14px">'+w.n.ico+' '+w.n.t+'</span><span class="small" style="flex:none">'+w.s.done+' done · '+w.s.skip+' skipped</span></div><div class="bar"><i style="width:'+Math.max(4,w.r*100)+'%;background:linear-gradient(90deg,var(--sky),var(--calm))"></i></div></div>'}).join("")+'</div>'+
+    (S.nudgeLog.length?'<h3 class="mt24">Recent nudges</h3><div class="card mt8 list" style="padding:2px 16px">'+S.nudgeLog.slice(-4).reverse().map(function(l){var n=NUDGES.filter(function(x){return x.id===l.id})[0];return '<div><span>'+n.ico+'</span><div class="grow" style="font-size:14px">'+n.t+'</div><span class="pill" style="color:'+(l.r==="done"?"var(--calm)":"var(--mute)")+'">'+(l.r==="done"?"Done":"Not now")+'</span></div>'}).join("")+'</div>':'')+
+    '<p class="disclaim">Demo data. Trends are for your own reflection, not a clinical assessment.</p></div>';
+}
+function vCircle(){
+  var f=S.circle[0];
+  return '<div class="fade">'+header()+'<h1>Your Circle</h1><p class="mt8">Pick 2–3 people you trust. If Drift sees a real slide, it sends one of them a short, kind nudge to check on you. They never see your data.</p>'+
+    '<div class="card mt16 list" style="padding:4px 16px">'+(S.circle.length?S.circle.map(function(p,i){return '<div><div class="av" style="background:'+COLORS[i%4]+'">'+esc(p.name[0]||"?")+'</div><div class="grow"><h3>'+esc(p.name)+'</h3><div class="small">'+esc(p.rel||"Trusted person")+'</div></div><button class="pill" data-rm="'+i+'">Remove</button></div>'}).join(""):'<div><p class="small">No one yet. Add someone below.</p></div>')+'</div>'+
+    (S.circle.length<3?'<div class="card mt12"><h3>Add someone</h3><input id="cName" class="mt12" placeholder="Name (e.g. Jordan)" maxlength="24"><input id="cRel" class="mt8" placeholder="Relationship (e.g. Friend, Sponsor)" maxlength="24"><button class="btn soft mt12" style="height:46px" data-act="addCircle">+ Add to Circle</button></div>':'<p class="small mt12">Your Circle is full (3 people max keeps it personal).</p>')+
+    '<h2 class="mt24" style="font-size:17px">What they\'ll get</h2><p class="small mt8">Preview of the message'+(f?" "+esc(f.name)+" would receive":"")+'. No scores, no details, no alarms.</p>'+
+    '<div class="phoneMock mt12"><div class="small" style="text-align:center;margin-bottom:10px">Text message · from Drift</div>'+
+      '<div class="bubble" style="margin-left:0;background:#2a3463;border-radius:20px 20px 20px 6px">Hey'+(f?" "+esc(f.name):"")+', Alex added you to his Drift circle. No emergency, he just might be having a tougher week. If you get a minute today, a quick text or call would mean a lot. 💙</div>'+
+      '<div class="small" style="margin-top:10px;text-align:center">Reply STOP to leave Alex\'s circle</div></div>'+
+    '<div class="card mt12"><div class="row"><div class="ico">🛡️</div><div class="grow"><h3>Rules Drift follows</h3><p class="small" style="margin-top:4px;font-size:12.5px">Max one check-in per week · you can cancel before it sends · never shares why · emergencies always go to 988, not friends.</p></div></div></div>'+
+    '<p class="disclaim">Demo: no real messages are sent from this prototype.</p></div>';
+}
+function vMood(){
+  var M=[[1,"😞","Really low"],[2,"😕","Low"],[3,"😐","Okay"],[4,"🙂","Good"],[5,"😄","Great"]];
+  return '<div class="fade">'+header()+'<h1>Daily check-in</h1><p class="mt8">One tap. How are you feeling right now?</p>'+
+    '<div class="moods mt16">'+M.map(function(m){return '<button data-mood="'+m[0]+'" class="'+(S.mood===m[0]?"sel":"")+'"><span>'+m[1]+'</span>'+m[2]+'</button>'}).join("")+'</div>'+
+    (S.mood?'<div class="card mt16 fade"><h3>'+(S.mood>=4?"Love that. Logged for today.":S.mood===3?"Thanks for checking in. Logged.":"Thanks for being honest. That takes something.")+'</h3><p class="small mt8">'+(S.mood<=2?"Rough days happen. Drift will go easy on you today. If it feels like more than a rough day, help is right here.":"Check-ins help Drift learn your normal.")+'</p>'+(S.mood<=2?'<button class="btn warn mt12" style="height:46px" data-go="crisis">Talk to someone now: 988</button>':'')+'</div>':'')+
+    '<div class="card mt16"><h3>Is anything heavier going on?</h3><p class="small mt8">If you\'re thinking about hurting yourself, or feel unsafe, you don\'t have to wait for a pattern.</p><button class="btn ghost mt12" style="height:46px;border-color:rgba(255,138,122,.5);color:#ffb3a8" data-go="crisis">I\'m not okay right now</button></div>'+
+    '<p class="disclaim">Your answer stays on your phone and is only used for your own baseline.</p></div>';
+}
+function vCrisis(){
+  return '<div class="fade" style="text-align:center;padding-top:6px">'+
+    '<div class="row between"><button class="pill" data-back="1">‹ Back</button><span class="small">You\'re not alone</span></div>'+
+    '<p class="mt24" style="color:var(--text);font-size:16px">Free, confidential, 24/7</p>'+
+    '<div class="big988 mt12">988</div><h2 class="mt8">Suicide & Crisis Lifeline</h2>'+
+    '<p class="mt12" style="padding:0 8px">Talk to a trained counselor right now, by call or text. Anytime, about anything: stress, substance use, thoughts of suicide.</p>'+
+    '<a href="tel:988" class="btn warn mt24" style="text-decoration:none;height:58px;font-size:18px">📞 Call 988</a>'+
+    '<a href="sms:988" class="btn soft mt12" style="text-decoration:none;height:58px;font-size:18px">💬 Text 988</a>'+
+    '<a href="https://988lifeline.org/chat/" class="btn ghost mt12" style="text-decoration:none">Chat online at 988lifeline.org</a>'+
+    '<div class="card mt24" style="text-align:left"><div class="row"><div class="ico">🚨</div><div class="grow"><h3>In immediate danger?</h3><p class="small" style="margin-top:2px">Call 911 or go to the nearest emergency room.</p></div><a href="tel:911" class="pill" style="text-decoration:none;color:var(--hot)">Call 911</a></div></div>'+
+    '<div class="card mt12" style="text-align:left"><div class="row"><div class="ico">🎖️</div><div class="grow"><h3>Veterans</h3><p class="small" style="margin-top:2px">Call 988 and press 1, or text 838255.</p></div></div></div>'+
+    (S.circle.length?'<div class="card mt12" style="text-align:left"><div class="row"><div class="av" style="background:'+COLORS[0]+'">'+esc(S.circle[0].name[0])+'</div><div class="grow"><h3>Reach '+esc(S.circle[0].name)+'</h3><p class="small" style="margin-top:2px">Someone from your Circle.</p></div><span class="pill">demo</span></div></div>':'')+
+    '<p class="disclaim">Drift is not an emergency service and does not provide medical or crisis care.</p></div>';
+}
+
+// --- toast (push-style notification preview)
+function showToast(){
+  var n=NUDGES.filter(function(x){return x.id===S.activeNudge})[0];if(!n)return;
+  var t=document.getElementById("toast");
+  t.innerHTML='<div class="row"><div class="logo" style="font-size:13px"><i style="width:18px;height:18px"></i>DRIFT</div><span class="small" style="margin-left:auto">now</span></div><div class="row mt8" style="align-items:flex-start"><span style="font-size:22px">'+n.ico+'</span><div class="grow"><h3>Hey Alex, '+n.t.charAt(0).toLowerCase()+n.t.slice(1)+'?</h3><p class="small" style="margin-top:2px;color:var(--mute)">Today looks different from your usual. Tap to see.</p></div></div>';
+  t.classList.add("show");
+  t.onclick=function(){t.classList.remove("show");go("today");setTimeout(function(){var c=document.getElementById("nudgeCard");if(c)c.scrollIntoView({behavior:"smooth",block:"center"})},50)};
+  setTimeout(function(){t.classList.remove("show")},5200);
+}
+
+// --- router
+var route="",obStep=0,prev="today";
+function go(r){if(r!=="crisis"&&route!=="crisis")prev=route||"today";if(r==="crisis"&&route!=="crisis")prev=route||"today";route=r;render();var v=document.getElementById("view");v.scrollTop=0;
+  var h="#"+r;if(location.hash!==h)history.replaceState(null,"",h)}
+function render(){
+  var tt=document.getElementById("toast");if(tt&&route!=="today")tt.classList.remove("show");
+  var v=document.getElementById("view"),tb=document.getElementById("tabs"),ph=document.getElementById("phone");
+  if(!S.onboarded&&route!=="crisis"){route="onboard"}
+  var html;
+  ph.className=route==="crisis"?"crisis":"";
+  if(route==="onboard"){html=vOnboard(obStep);tb.style.display="none";v.className="scroll noTabs"}
+  else if(route==="crisis"){html=vCrisis();tb.style.display="none";v.className="scroll noTabs"}
+  else{tb.style.display="flex";v.className="scroll";tabs(route);
+    html=route==="trends"?vTrends():route==="circle"?vCircle():route==="mood"?vMood():vToday()}
+  v.innerHTML=html;
+}
+document.addEventListener("click",function(e){
+  var el=e.target.closest("[data-go],[data-ob],[data-tog],[data-act],[data-nudge],[data-mood],[data-rm],[data-back]");if(!el)return;
+  var d=el.dataset;
+  if(d.go){go(d.go);return}
+  if(d.back){go(prev&&prev!=="crisis"?prev:"today");return}
+  if(d.ob){if(d.ob==="done"){S.onboarded=true;save();go("today")}else{obStep=+d.ob;render();document.getElementById("view").scrollTop=0}return}
+  if(d.tog){S.consents[d.tog]=!S.consents[d.tog];save();el.classList.toggle("on");return}
+  if(d.nudge){var id=S.activeNudge;if(!id)return;var st=S.nudgeStats[id];
+    if(d.nudge==="done")st.done++;else st.skip++;
+    S.nudgeLog.push({id:id,r:d.nudge,t:Date.now()});S.activeNudge=null;save();
+    var c=document.getElementById("nudgeCard");
+    if(c){c.innerHTML='<div class="row"><div class="ico" style="font-size:22px">'+(d.nudge==="done"?"🌱":"👌")+'</div><div class="grow"><h3>'+(d.nudge==="done"?"Nice. Logged as something that works for you.":"No problem. Drift will try something else next time.")+'</h3><p class="small" style="margin-top:2px">See <b>What works for you</b> in Trends.</p></div></div>'}
+    return}
+  if(d.mood){S.mood=+d.mood;save();if(S.mood===1){go("crisis")}else render();return}
+  if(d.rm){S.circle.splice(+d.rm,1);save();render();return}
+  if(d.act==="rough"){applyRough(!S.rough);render();document.getElementById("view").scrollTop=0;return}
+  if(d.act==="sendCircle"){S.circleSent=true;save();render();return}
+  if(d.act==="pause"){S.circlePaused=true;save();render();return}
+  if(d.act==="unpause"){S.circlePaused=false;save();render();return}
+  if(d.act==="addCircle"){var n=document.getElementById("cName").value.trim(),r=document.getElementById("cRel").value.trim();if(!n){document.getElementById("cName").focus();return}if(S.circle.length>=3)return;S.circle.push({name:n,rel:r||"Trusted person"});save();render();return}
+});
+window.addEventListener("hashchange",function(){var p=parseHash();if(p.route&&p.route!==route)go(p.route)});
+var r0=init.route;
+if(r0==="onboard"){S.onboarded=false;obStep=+(init.q.step||0)}
+route=r0||(S.onboarded?"today":"onboard");
+if(!S.onboarded&&route!=="crisis")route="onboard";
+render();
+if(init.q.toast)setTimeout(showToast,300);
+window.__drift={state:function(){return S},reset:function(){S=defaults();save();obStep=0;go("onboard")}};
+})();
+</script>
+</body>
+</html>
