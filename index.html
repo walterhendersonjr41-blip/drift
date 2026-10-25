@@ -94,6 +94,7 @@ input:focus{border-color:var(--sky)}
 .seg button.on{background:var(--card2);color:var(--text)}
 .disclaim{font-size:11.5px;color:var(--dim);text-align:center;line-height:1.5;margin-top:18px}
 </style>
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><link rel="icon" href="icons/icon-192.png">
 </head>
 <body>
 <div id="phone">
@@ -406,5 +407,8 @@ if(init.q.toast)setTimeout(showToast,300);
 window.__drift={state:function(){return S},reset:function(){S=defaults();save();obStep=0;go("onboard")}};
 })();
 </script>
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
+<script src="ai-helper.js"></script>
+<script>AIHelper.init({"bottom": 96, "referrer": "drift", "title": "🌙 Calm helper", "color": "#4c63c9", "greeting": "I'm here if you want a quick grounding exercise, a small idea for a rough day, or help writing a text to someone you trust. If you're in crisis, call or text 988 (US) right now.", "system": "You are a gentle, supportive wellbeing companion inside Drift. Offer short evidence-based coping ideas (breathing, grounding, a short walk, sleep hygiene, reaching out), and help draft kind messages to trusted people. You are not a therapist and never diagnose. If the user mentions self-harm, suicide, or being in danger, tell them clearly to call or text 988 (US Suicide & Crisis Lifeline) or 911 now, and stay supportive. Keep replies short and warm.", "note": "Not medical advice. In crisis? Call or text 988 (US).", "chips": [["A 1-minute calm-down", "Walk me through a 1-minute grounding exercise."], ["I'm having a rough day", "I'm having a rough day. Give me three small things I could do in the next hour."], ["Text someone I trust", "Help me write a short text asking a friend to check in on me today."]]});</script>
 </body>
 </html>
